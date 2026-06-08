@@ -21,14 +21,15 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	balance, err := h.service.GetBalance(r.Context(), addr)
+	wei, eth, err := h.service.GetBalance(r.Context(), addr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{
-		"address": addr,
-		"balance": balance,
+		"address":     addr,
+		"balance_wei": wei,
+		"balance_eth": eth,
 	})
 }

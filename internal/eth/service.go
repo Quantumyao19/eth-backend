@@ -2,6 +2,7 @@ package eth
 
 import (
 	"context"
+	"eth-backend/utils"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -18,10 +19,13 @@ func (s *Service) GetBlockNumber(ctx context.Context) (uint64, error) {
 	return s.client.rpc.BlockNumber(ctx)
 }
 
-func (s *Service) GetBalance(ctx context.Context, addr string) (string, error) {
+func (s *Service) GetBalance(ctx context.Context, addr string) (string, string, error) {
 	balance, err := s.client.rpc.BalanceAt(ctx, common.HexToAddress(addr), nil)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return balance.String(), nil
+
+	wei := balance.String()
+	eth := utils.WeiToETH(balance)
+	return wei, eth, nil
 }
