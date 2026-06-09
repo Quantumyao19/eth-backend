@@ -1,6 +1,12 @@
 package eth
 
-import "github.com/ethereum/go-ethereum/ethclient"
+import (
+	"context"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
+)
 
 type Client struct {
 	rpc *ethclient.Client
@@ -16,4 +22,12 @@ func NewClient(rpcURL string) (*Client, error) {
 
 func (c *Client) Close() {
 	c.rpc.Close()
+}
+
+func (c *Client) TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error) {
+	tx, isPending, err := c.rpc.TransactionByHash(ctx, hash)
+	if err != nil {
+		return nil, false, err
+	}
+	return tx, isPending, nil
 }

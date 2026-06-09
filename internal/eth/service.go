@@ -3,8 +3,10 @@ package eth
 import (
 	"context"
 	"eth-backend/utils"
+	"log"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type Service struct {
@@ -28,4 +30,12 @@ func (s *Service) GetBalance(ctx context.Context, addr string) (string, string, 
 	wei := balance.String()
 	eth := utils.WeiToETH(balance)
 	return wei, eth, nil
+}
+
+func (s *Service) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error) {
+	tx, isPending, err := s.client.TransactionByHash(ctx, hash)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return tx, isPending, nil
 }

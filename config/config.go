@@ -3,14 +3,28 @@ package config
 import "os"
 
 type Config struct {
-	RPCURL string
-	Port   string
+	Server ServerConfig
+	Eth    EthConfig
+}
+
+type ServerConfig struct {
+	Port string
+}
+
+type EthConfig struct {
+	RPCURL  string
+	ChainID string
 }
 
 func Load() *Config {
 	return &Config{
-		RPCURL: getEnv("RPC_URL", "https://sepolia.infura.io/v3/xxxxxx"),
-		Port:   getEnv("PORT", "8080"),
+		Server: ServerConfig{
+			Port: getEnv("PORT", "8080"),
+		},
+		Eth: EthConfig{
+			RPCURL:  mustGetEnv("RPC_URL"),
+			ChainID: getEnv("CHAIN_ID", "11155111"),
+		},
 	}
 }
 
@@ -19,4 +33,12 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func mustGetEnv(key string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		panic("missing required env: " + key)
+	}
+	return v
 }

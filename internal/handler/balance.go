@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"eth-backend/internal/eth"
 	"net/http"
 )
@@ -23,11 +22,11 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 
 	wei, eth, err := h.service.GetBalance(r.Context(), addr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to get balance", http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, map[string]string{
 		"address":     addr,
 		"balance_wei": wei,
 		"balance_eth": eth,

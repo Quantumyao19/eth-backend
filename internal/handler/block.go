@@ -12,7 +12,12 @@ func (h *Handler) BlockNumber(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]uint64{
+	writeJSON(w, map[string]uint64{
 		"block": block,
 	})
+}
+
+func writeJSON(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
 }
