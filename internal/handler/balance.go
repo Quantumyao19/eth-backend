@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"eth-backend/internal/eth"
+	"log"
 	"net/http"
 )
 
@@ -16,13 +18,17 @@ func NewHandler(s *eth.Service) *Handler {
 func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 	addr := r.URL.Query().Get("address")
 	if addr == "" {
-		http.Error(w, "missing address", http.StatusBadRequest)
+		writeError(w, "missing address", http.StatusBadRequest)
 		return
 	}
 
-	wei, eth, err := h.service.GetBalance(r.Context(), addr)
+	ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
+	defer cancel()
+
+	wei, eth, err := h.service.GetBalance(ctx, addr)
 	if err != nil {
-		http.Error(w, "failed to get balance", http.StatusInternalServerError)
+		log.Println("GetBalance error:", err)
+		handleError(w, err)
 		return
 	}
 

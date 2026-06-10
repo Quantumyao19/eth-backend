@@ -1,14 +1,23 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+	"time"
 )
 
+const defaultTimeout = 5 * time.Second
+
 func (h *Handler) BlockNumber(w http.ResponseWriter, r *http.Request) {
-	block, err := h.service.GetBlockNumber(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
+	defer cancel()
+
+	block, err := h.service.GetBlockNumber(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println("GetBlockNumber error:", err)
+		handleError(w, err)
 		return
 	}
 
