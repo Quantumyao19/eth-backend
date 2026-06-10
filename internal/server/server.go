@@ -20,6 +20,7 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/block", s.handler.BlockNumber)
 	mux.HandleFunc("/tx", s.handler.Transaction)
 	mux.HandleFunc("/receipt", s.handler.Receipt)
+	mux.HandleFunc("/tx/detail", s.handler.TxDetail)
 
 	wrappedMux := middleware.Recover(
 		middleware.Logging(mux),
