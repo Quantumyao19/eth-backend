@@ -39,3 +39,7 @@ func (s *Service) GetTransaction(ctx context.Context, hash common.Hash) (*types.
 	}
 	return tx, isPending, nil
 }
+
+func (s *Service) GetTransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	return s.client.rpc.TransactionReceipt(ctx, hash)
+}
