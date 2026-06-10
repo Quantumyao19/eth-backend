@@ -11,6 +11,7 @@ func Recover(next http.Handler) http.Handler {
 			if err := recover(); err != nil {
 				log.Printf("[PANIC] %v", err)
 
+				//TODO: error handling in json format
 				http.Error(w, "internal server error", http.StatusInternalServerError)
 			}
 		}()

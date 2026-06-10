@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/hex"
+	"log"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -22,23 +24,27 @@ type TransactionResponse struct {
 func (h *Handler) Transaction(w http.ResponseWriter, r *http.Request) {
 	hash := r.URL.Query().Get("hash")
 	if hash == "" {
-		http.Error(w, "missing hash", http.StatusBadRequest)
+		writeError(w, "missing hash", http.StatusBadRequest)
 		return
 	}
 
 	if !common.IsHexHash(hash) {
-		http.Error(w, "invalid hash format", http.StatusBadRequest)
+		writeError(w, "invalid hash format", http.StatusBadRequest)
 		return
 	}
 
-	tx, isPending, err := h.service.GetTransaction(r.Context(), common.HexToHash(hash))
+	ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
+	defer cancel()
+
+	tx, isPending, err := h.service.GetTransaction(ctx, common.HexToHash(hash))
 	if err != nil {
-		http.Error(w, "failed to get transaction", http.StatusInternalServerError)
+		log.Println("GetTransaction error:", err)
+		handleError(w, err)
 		return
 	}
 
 	if tx == nil {
-		http.Error(w, "transaction not found", http.StatusNotFound)
+		writeError(w, "transaction not found", http.StatusNotFound)
 		return
 	}
 
