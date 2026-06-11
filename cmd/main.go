@@ -23,7 +23,7 @@ func main() {
 	}
 	defer client.Close()
 
-	service := eth.NewService(client)
+	service, err := eth.NewService(client, cfg.Eth)
 	h := handler.NewHandler(service)
 	srv := server.NewServer(h)
 
