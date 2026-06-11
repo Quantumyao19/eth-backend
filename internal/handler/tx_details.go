@@ -3,18 +3,29 @@ package handler
 import (
 	"context"
 	"log"
+	"math/big"
 	"net/http"
+
+	"eth-backend/utils"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
 type TxDetailResponse struct {
 	Hash     string `json:"hash"`
+	From     string `json:"from"`
 	To       string `json:"to"`
-	Value    string `json:"value"`
+	ValueEth string `json:"value_eth"`
+
 	GasLimit uint64 `json:"gas_limit"`
 	GasUsed  uint64 `json:"gas_used"`
-	Status   string `json:"status"`
+	GasPrice string `json:"gas_price"`
+	FeeEth   string `json:"fee_eth"`
+
+	Status    string `json:"status"`
+	IsPending bool   `json:"is_pending"`
+
+	BlockNumber string `json:"block_number,omitempty"`
 }
 
 func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
@@ -32,8 +43,8 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
 	defer cancel()
 
-	//obtain transaction
-	tx, _, err := h.service.GetTransaction(ctx, common.HexToHash(hash))
+	// obtain transaction
+	tx, isPending, err := h.service.GetTransaction(ctx, common.HexToHash(hash))
 	if err != nil {
 		log.Println("GetTransaction error:", err)
 		handleError(w, err)
@@ -45,7 +56,7 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//obtain receipt
+	// obtain receipt
 	receipt, err := h.service.GetTransactionReceipt(ctx, common.HexToHash(hash))
 	if err != nil {
 		log.Println("GetReceipt error:", err)
@@ -55,9 +66,10 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 
 	gasUsed := uint64(0)
 	status := "pending"
-
+	blockNumber := ""
 	if receipt != nil {
 		gasUsed = receipt.GasUsed
+		blockNumber = receipt.BlockNumber.String()
 		if receipt.Status == 1 {
 			status = "success"
 		} else {
@@ -70,13 +82,36 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 		to = tx.To().Hex()
 	}
 
+	from, err := h.service.GetTransactionSender(ctx, tx)
+	if err != nil {
+		log.Println("GetTransactionSender error:", err)
+		handleError(w, err)
+		return
+	}
+
+	gasPrice := tx.GasPrice()
+	if receipt != nil && receipt.EffectiveGasPrice != nil {
+		gasPrice = receipt.EffectiveGasPrice
+	}
+
+	feeEth := "0"
+	if gasUsed > 0 {
+		feeWei := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
+		feeEth = utils.WeiToETH(feeWei)
+	}
+
 	resp := TxDetailResponse{
-		Hash:     tx.Hash().Hex(),
-		To:       to,
-		Value:    tx.Value().String(),
-		GasLimit: tx.Gas(),
-		GasUsed:  gasUsed,
-		Status:   status,
+		Hash:        tx.Hash().Hex(),
+		From:        from.Hex(),
+		To:          to,
+		ValueEth:    utils.WeiToETH(tx.Value()),
+		GasLimit:    tx.Gas(),
+		GasUsed:     gasUsed,
+		GasPrice:    gasPrice.String(),
+		FeeEth:      feeEth,
+		Status:      status,
+		IsPending:   isPending,
+		BlockNumber: blockNumber,
 	}
 
 	writeJSON(w, resp)
