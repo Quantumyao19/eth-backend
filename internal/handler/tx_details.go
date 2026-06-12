@@ -30,8 +30,9 @@ type TxDetailResponse struct {
 
 	BlockNumber string `json:"block_number,omitempty"`
 
-	Logs      []LogRaw
-	Transfers []TransferLog
+	Logs      []LogRaw      `json:"logs"`
+	Transfers []TransferLog `json:"transfers"`
+	Approvals []ApprovalLog `json:"approvals"`
 }
 
 type LogRaw struct {
@@ -48,16 +49,36 @@ type TransferLog struct {
 	Symbol string `json:"symbol"`
 }
 
-const erc20ABI = `[{
-	"anonymous": false,
-	"inputs": [
-		{"indexed": true, "name": "from", "type": "address"},
-		{"indexed": true, "name": "to", "type": "address"},
-		{"indexed": false, "name": "value", "type": "uint256"}
-	],
-	"name": "Transfer",
-	"type": "event"
-}]`
+type ApprovalLog struct {
+	Token   string `json:"token"`
+	Owner   string `json:"owner"`
+	Spender string `json:"spender"`
+	Value   string `json:"value"`
+	Symbol  string `json:"symbol"`
+}
+
+const erc20ABI = `[
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "name": "from", "type": "address"},
+      {"indexed": true, "name": "to", "type": "address"},
+      {"indexed": false, "name": "value", "type": "uint256"}
+    ],
+    "name": "Transfer",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "name": "owner", "type": "address"},
+      {"indexed": true, "name": "spender", "type": "address"},
+      {"indexed": false, "name": "value", "type": "uint256"}
+    ],
+    "name": "Approval",
+    "type": "event"
+  }
+]`
 
 func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 	hash := r.URL.Query().Get("hash")
@@ -77,7 +98,6 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 	// obtain transaction
 	tx, isPending, err := h.service.GetTransaction(ctx, common.HexToHash(hash))
 	if err != nil {
-		log.Println("GetTransaction error:", err)
 		handleError(w, err)
 		return
 	}
@@ -90,7 +110,6 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 	// obtain receipt
 	receipt, err := h.service.GetTransactionReceipt(ctx, common.HexToHash(hash))
 	if err != nil {
-		log.Println("GetReceipt error:", err)
 		handleError(w, err)
 		return
 	}
@@ -104,50 +123,14 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 
 	var logList []LogRaw
 	var transfers []TransferLog
+	var approvals []ApprovalLog
+
+	tokenMetaCache := make(map[string]struct {
+		Symbol   string
+		Decimals uint8
+	})
 
 	for _, l := range receipt.Logs {
-		if len(l.Topics) == 0 {
-			continue
-		}
-
-		event, err := parsedABI.EventByID(l.Topics[0])
-		if err != nil {
-			continue
-		}
-
-		if event.Name != "Transfer" || len(l.Topics) < 3 {
-			continue
-		}
-
-		var data struct {
-			Value *big.Int
-		}
-
-		if err := parsedABI.UnpackIntoInterface(&data, "Transfer", l.Data); err != nil {
-			log.Println("decode transfer error:", err)
-			continue
-		}
-
-		from := common.HexToAddress(l.Topics[1].Hex())
-		to := common.HexToAddress(l.Topics[2].Hex())
-
-		symbol := "UNKNOWN"
-		decimals := uint8(18)
-
-		s, d, err := h.service.GetTokenMeta(ctx, l.Address)
-		if err == nil {
-			symbol = s
-			decimals = d
-		}
-
-		transfers = append(transfers, TransferLog{
-			Token:  l.Address.Hex(),
-			From:   from.Hex(),
-			To:     to.Hex(),
-			Value:  utils.FormatTokenAmount(data.Value, decimals),
-			Symbol: symbol,
-		})
-
 		var topics []string
 		for _, t := range l.Topics {
 			topics = append(topics, t.Hex())
@@ -158,58 +141,117 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 			Topics:  topics,
 			Data:    "0x" + common.Bytes2Hex(l.Data),
 		})
-	}
 
-	gasUsed := uint64(0)
-	status := "pending"
-	blockNumber := ""
-	if receipt != nil {
-		gasUsed = receipt.GasUsed
-		blockNumber = receipt.BlockNumber.String()
-		if receipt.Status == 1 {
-			status = "success"
-		} else {
-			status = "failed"
+		if len(l.Topics) == 0 {
+			continue
+		}
+
+		event, err := parsedABI.EventByID(l.Topics[0])
+		if err != nil {
+			continue
+		}
+
+		meta, ok := tokenMetaCache[l.Address.Hex()]
+		if !ok {
+			symbol := "UNKNOWN"
+			decimals := uint8(18)
+
+			s, d, err := h.service.GetTokenMeta(ctx, l.Address)
+			if err == nil {
+				symbol = s
+				decimals = d
+			}
+
+			meta = struct {
+				Symbol   string
+				Decimals uint8
+			}{
+				symbol, decimals,
+			}
+
+			tokenMetaCache[l.Address.Hex()] = meta
+		}
+
+		switch event.Name {
+		case "Transfer":
+			if len(l.Topics) < 3 {
+				continue
+			}
+
+			var data struct {
+				Value *big.Int
+			}
+			if err := parsedABI.UnpackIntoInterface(&data, "Transfer", l.Data); err != nil {
+				continue
+			}
+
+			from := common.HexToAddress(l.Topics[1].Hex())
+			to := common.HexToAddress(l.Topics[2].Hex())
+
+			transfers = append(transfers, TransferLog{
+				Token:  l.Address.Hex(),
+				From:   from.Hex(),
+				To:     to.Hex(),
+				Value:  utils.FormatTokenAmount(data.Value, meta.Decimals),
+				Symbol: meta.Symbol,
+			})
+
+		case "Approval":
+			if len(l.Topics) < 3 {
+				continue
+			}
+
+			var data struct {
+				Value *big.Int
+			}
+
+			if err := parsedABI.UnpackIntoInterface(&data, "Approval", l.Data); err != nil {
+				continue
+			}
+
+			owner := common.HexToAddress(l.Topics[1].Hex())
+			spender := common.HexToAddress(l.Topics[2].Hex())
+
+			approvals = append(approvals, ApprovalLog{
+				Token:   l.Address.Hex(),
+				Owner:   owner.Hex(),
+				Spender: spender.Hex(),
+				Value:   utils.FormatTokenAmount(data.Value, meta.Decimals),
+				Symbol:  meta.Symbol,
+			})
 		}
 	}
 
-	to := ""
-	if tx.To() != nil {
-		to = tx.To().Hex()
+	gasUsed := receipt.GasUsed
+	status := "success"
+	if receipt.Status != 1 {
+		status = "failed"
 	}
 
-	from, err := h.service.GetTransactionSender(ctx, tx)
-	if err != nil {
-		log.Println("GetTransactionSender error:", err)
-		handleError(w, err)
-		return
-	}
+	from, _ := h.service.GetTransactionSender(ctx, tx)
 
 	gasPrice := tx.GasPrice()
-	if receipt != nil && receipt.EffectiveGasPrice != nil {
+	if receipt.EffectiveGasPrice != nil {
 		gasPrice = receipt.EffectiveGasPrice
 	}
 
-	feeEth := "0"
-	if gasUsed > 0 {
-		feeWei := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
-		feeEth = utils.WeiToETH(feeWei)
-	}
+	feeWei := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), gasPrice)
 
 	resp := TxDetailResponse{
 		Hash:        tx.Hash().Hex(),
 		From:        from.Hex(),
-		To:          to,
+		To:          tx.To().Hex(),
 		ValueEth:    utils.WeiToETH(tx.Value()),
 		GasLimit:    tx.Gas(),
 		GasUsed:     gasUsed,
 		GasPrice:    gasPrice.String(),
-		FeeEth:      feeEth,
+		FeeEth:      utils.WeiToETH(feeWei),
 		Status:      status,
 		IsPending:   isPending,
-		BlockNumber: blockNumber,
+		BlockNumber: receipt.BlockNumber.String(),
 		Logs:        logList,
 		Transfers:   transfers,
+		Approvals:   approvals,
 	}
 
 	writeJSON(w, resp)
