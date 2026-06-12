@@ -5,7 +5,6 @@ import (
 	"eth-backend/config"
 	"eth-backend/utils"
 	"fmt"
-	"log"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -19,7 +18,7 @@ type Service struct {
 
 func NewService(client *Client, cfg config.EthConfig) (*Service, error) {
 	ctx := context.Background()
-	chainID, err := client.rpc.NetworkID(ctx)
+	chainID, err := client.rpc.ChainID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -32,8 +31,8 @@ func NewService(client *Client, cfg config.EthConfig) (*Service, error) {
 	}
 
 	//compare chainID
-	if configChainID != nil && configChainID.Cmp(chainID) != 0 {
-		log.Fatalf("chainID mismatch: config=%s rpc=%s",
+	if configChainID.Cmp(chainID) != 0 {
+		return nil, fmt.Errorf("chainID mismatch: config=%s rpc=%s",
 			configChainID.String(),
 			chainID.String(),
 		)
@@ -63,7 +62,7 @@ func (s *Service) GetBalance(ctx context.Context, addr string) (string, string, 
 func (s *Service) GetTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error) {
 	tx, isPending, err := s.client.TransactionByHash(ctx, hash)
 	if err != nil {
-		log.Fatal(err)
+		return nil, false, err
 	}
 	return tx, isPending, nil
 }
