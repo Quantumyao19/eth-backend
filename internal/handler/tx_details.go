@@ -2,13 +2,15 @@ package handler
 
 import (
 	"context"
-	"log"
 	"math/big"
 	"net/http"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"go.uber.org/zap"
 
+	"eth-backend/internal/logger"
+	"eth-backend/internal/middleware"
 	"eth-backend/utils"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -81,6 +83,8 @@ const erc20ABI = `[
 ]`
 
 func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
+	requestID, _ := r.Context().Value(middleware.RequestIDKey).(string)
+
 	hash := r.URL.Query().Get("hash")
 	if hash == "" {
 		writeError(w, "missing hash", http.StatusBadRequest)
@@ -116,7 +120,7 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 
 	parsedABI, err := abi.JSON(strings.NewReader(erc20ABI))
 	if err != nil {
-		log.Println("Parsed ABI error:", err)
+		logger.Log.Fatal("parsed abi", zap.Error(err), zap.String("request_id", requestID))
 		handleError(w, err)
 		return
 	}
