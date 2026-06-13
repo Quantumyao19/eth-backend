@@ -31,7 +31,10 @@ func Logging(next http.Handler) http.Handler {
 
 		duration := time.Since(start).Milliseconds()
 
+		requestID, _ := r.Context().Value(RequestIDKey).(string)
+
 		logger.Log.Info("http request",
+			zap.String("request_id", requestID),
 			zap.String("method", r.Method),
 			zap.String("path", r.URL.Path),
 			zap.Int("status", rw.statusCode),

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"eth-backend/internal/logger"
+	"eth-backend/internal/middleware"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -16,6 +17,8 @@ type ReceiptResponse struct {
 }
 
 func (h *Handler) Receipt(w http.ResponseWriter, r *http.Request) {
+	requestID, _ := r.Context().Value(middleware.RequestIDKey).(string)
+
 	hash := r.URL.Query().Get("hash")
 	if hash == "" {
 		writeError(w, "missing hash", http.StatusBadRequest)
@@ -32,7 +35,7 @@ func (h *Handler) Receipt(w http.ResponseWriter, r *http.Request) {
 
 	receipt, err := h.service.GetTransactionReceipt(ctx, common.HexToHash(hash))
 	if err != nil {
-		logger.Log.Fatal("get receipt error", zap.Error(err))
+		logger.Log.Fatal("get receipt error", zap.Error(err), zap.String("request_id", requestID))
 		handleError(w, err)
 		return
 	}

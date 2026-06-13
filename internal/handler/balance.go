@@ -4,6 +4,7 @@ import (
 	"context"
 	"eth-backend/internal/eth"
 	"eth-backend/internal/logger"
+	"eth-backend/internal/middleware"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -18,6 +19,8 @@ func NewHandler(s *eth.Service) *Handler {
 }
 
 func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
+	requestID, _ := r.Context().Value(middleware.RequestIDKey).(string)
+
 	addr := r.URL.Query().Get("address")
 	if addr == "" {
 		writeError(w, "missing address", http.StatusBadRequest)
@@ -29,7 +32,7 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 
 	wei, eth, err := h.service.GetBalance(ctx, addr)
 	if err != nil {
-		logger.Log.Fatal("GetBalance error", zap.Error(err))
+		logger.Log.Fatal("GetBalance error", zap.Error(err), zap.String("request_id", requestID))
 		handleError(w, err)
 		return
 	}
