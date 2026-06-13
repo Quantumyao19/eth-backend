@@ -3,8 +3,10 @@ package handler
 import (
 	"context"
 	"eth-backend/internal/eth"
-	"log"
+	"eth-backend/internal/logger"
 	"net/http"
+
+	"go.uber.org/zap"
 )
 
 type Handler struct {
@@ -27,7 +29,7 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 
 	wei, eth, err := h.service.GetBalance(ctx, addr)
 	if err != nil {
-		log.Println("GetBalance error:", err)
+		logger.Log.Fatal("GetBalance error", zap.Error(err))
 		handleError(w, err)
 		return
 	}

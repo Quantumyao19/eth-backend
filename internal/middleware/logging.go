@@ -1,22 +1,16 @@
 package middleware
 
 import (
-	"encoding/json"
-	"log"
+	"eth-backend/internal/logger"
 	"net/http"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
-}
-
-type LogEntry struct {
-	Method     string `json:"method"`
-	Path       string `json:"path"`
-	Status     int    `json:"status"`
-	DurationMs int64  `json:"duration_ms"`
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -35,19 +29,13 @@ func Logging(next http.Handler) http.Handler {
 
 		next.ServeHTTP(rw, r)
 
-		entry := LogEntry{
-			Method:     r.Method,
-			Path:       r.URL.Path,
-			Status:     rw.statusCode,
-			DurationMs: time.Since(start).Milliseconds(),
-		}
+		duration := time.Since(start).Milliseconds()
 
-		jsonData, err := json.Marshal(entry)
-		if err != nil {
-			log.Printf("failed to marshal log entry: %v", err)
-			return
-		}
-		log.Println(string(jsonData))
-
+		logger.Log.Info("http request",
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+			zap.Int("status", rw.statusCode),
+			zap.Int64("duration_ms", duration),
+		)
 	})
 }

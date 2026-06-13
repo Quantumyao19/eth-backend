@@ -3,9 +3,11 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"eth-backend/internal/logger"
 	"net/http"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 const defaultTimeout = 5 * time.Second
@@ -16,7 +18,7 @@ func (h *Handler) BlockNumber(w http.ResponseWriter, r *http.Request) {
 
 	block, err := h.service.GetBlockNumber(ctx)
 	if err != nil {
-		log.Println("GetBlockNumber error:", err)
+		logger.Log.Fatal("get blocknumber error", zap.Error(err))
 		handleError(w, err)
 		return
 	}

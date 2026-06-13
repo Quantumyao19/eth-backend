@@ -2,13 +2,14 @@ package handler
 
 import (
 	"context"
-	"log"
 	"math/big"
 	"net/http"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"go.uber.org/zap"
 
+	"eth-backend/internal/logger"
 	"eth-backend/utils"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -116,7 +117,7 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 
 	parsedABI, err := abi.JSON(strings.NewReader(erc20ABI))
 	if err != nil {
-		log.Println("Parsed ABI error:", err)
+		logger.Log.Fatal("parsed abi", zap.Error(err))
 		handleError(w, err)
 		return
 	}

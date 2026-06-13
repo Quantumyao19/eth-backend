@@ -2,10 +2,11 @@ package handler
 
 import (
 	"context"
-	"log"
+	"eth-backend/internal/logger"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
+	"go.uber.org/zap"
 )
 
 type ReceiptResponse struct {
@@ -31,7 +32,7 @@ func (h *Handler) Receipt(w http.ResponseWriter, r *http.Request) {
 
 	receipt, err := h.service.GetTransactionReceipt(ctx, common.HexToHash(hash))
 	if err != nil {
-		log.Println("GetReceipt error:", err)
+		logger.Log.Fatal("get receipt error", zap.Error(err))
 		handleError(w, err)
 		return
 	}

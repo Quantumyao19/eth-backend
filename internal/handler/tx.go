@@ -3,11 +3,12 @@ package handler
 import (
 	"context"
 	"encoding/hex"
-	"log"
+	"eth-backend/internal/logger"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"go.uber.org/zap"
 )
 
 type TransactionResponse struct {
@@ -38,7 +39,7 @@ func (h *Handler) Transaction(w http.ResponseWriter, r *http.Request) {
 
 	tx, isPending, err := h.service.GetTransaction(ctx, common.HexToHash(hash))
 	if err != nil {
-		log.Println("GetTransaction error:", err)
+		logger.Log.Fatal("gettransaction error", zap.Error(err))
 		handleError(w, err)
 		return
 	}
