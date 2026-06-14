@@ -7,6 +7,7 @@ import (
 type Config struct {
 	Server ServerConfig
 	Eth    EthConfig
+	DB     Database
 }
 
 type ServerConfig struct {
@@ -16,6 +17,10 @@ type ServerConfig struct {
 type EthConfig struct {
 	RPCURL  string
 	ChainID string
+}
+
+type Database struct {
+	URL string
 }
 
 func Load() *Config {
