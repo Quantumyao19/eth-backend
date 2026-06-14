@@ -52,22 +52,11 @@ func (l *Listener) loop(ctx context.Context) {
 			}
 
 			if lastBlock == 0 {
-				if latestBlock > 5 {
-					lastBlock = latestBlock - 5
-				} else {
-					lastBlock = 0
-				}
+				lastBlock = latestBlock - 5
 				continue
 			}
 
-			from := lastBlock + 1
-			if from > latestBlock {
-				// nothing new
-				lastBlock = latestBlock
-				continue
-			}
-
-			logs, err := l.fetchLogs(ctx, from, latestBlock)
+			logs, err := l.fetchLogs(ctx, lastBlock, latestBlock)
 			if err != nil {
 				logger.Log.Error("fetch logs error", zap.Error(err))
 				continue
