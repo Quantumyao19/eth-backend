@@ -87,12 +87,9 @@ func (l *Listener) loop(ctx context.Context) {
 func (l *Listener) fetchLogs(ctx context.Context, from, to uint64) ([]types.Log, error) {
 	transferSigHash := crypto.Keccak256Hash([]byte("Transfer(address,address,uint256)"))
 
-	testTokenAddress := common.HexToAddress("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238")
-
 	query := ethereum.FilterQuery{
 		FromBlock: big.NewInt(int64(from)),
 		ToBlock:   big.NewInt(int64(to)),
-		Addresses: []common.Address{testTokenAddress},
 		Topics: [][]common.Hash{
 			{
 				transferSigHash,
