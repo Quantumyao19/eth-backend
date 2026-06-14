@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"eth-backend/config"
 	"eth-backend/internal/eth"
 	"eth-backend/internal/handler"
+	"eth-backend/internal/listener"
 	"eth-backend/internal/logger"
 	"eth-backend/internal/server"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
@@ -34,8 +39,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	l := listener.NewListener(client.Raw())
+	l.Start(ctx)
+
 	h := handler.NewHandler(service)
 	srv := server.NewServer(h)
+
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+		sig := <-sigCh
+		logger.Log.Info("shutdown signal received", zap.String("signal", sig.String()))
+
+		cancel()
+	}()
 
 	logger.Log.Info("server ready", zap.String("port", cfg.Server.Port))
 

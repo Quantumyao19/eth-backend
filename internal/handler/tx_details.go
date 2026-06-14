@@ -120,7 +120,7 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 
 	parsedABI, err := abi.JSON(strings.NewReader(erc20ABI))
 	if err != nil {
-		logger.Log.Fatal("parsed abi", zap.Error(err), zap.String("request_id", requestID))
+		logger.Log.Error("parsed abi", zap.Error(err), zap.String("request_id", requestID))
 		handleError(w, err)
 		return
 	}

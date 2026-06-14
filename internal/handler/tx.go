@@ -42,7 +42,7 @@ func (h *Handler) Transaction(w http.ResponseWriter, r *http.Request) {
 
 	tx, isPending, err := h.service.GetTransaction(ctx, common.HexToHash(hash))
 	if err != nil {
-		logger.Log.Fatal("gettransaction error", zap.Error(err), zap.String("request_id", requestID))
+		logger.Log.Error("gettransaction error", zap.Error(err), zap.String("request_id", requestID))
 		handleError(w, err)
 		return
 	}

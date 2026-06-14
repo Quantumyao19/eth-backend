@@ -32,7 +32,7 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 
 	wei, eth, err := h.service.GetBalance(ctx, addr)
 	if err != nil {
-		logger.Log.Fatal("GetBalance error", zap.Error(err), zap.String("request_id", requestID))
+		logger.Log.Error("GetBalance error", zap.Error(err), zap.String("request_id", requestID))
 		handleError(w, err)
 		return
 	}
