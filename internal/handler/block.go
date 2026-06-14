@@ -21,7 +21,7 @@ func (h *Handler) BlockNumber(w http.ResponseWriter, r *http.Request) {
 
 	block, err := h.service.GetBlockNumber(ctx)
 	if err != nil {
-		logger.Log.Fatal("get blocknumber error", zap.Error(err), zap.String("request_id", requestID))
+		logger.Log.Error("get blocknumber error", zap.Error(err), zap.String("request_id", requestID))
 		handleError(w, err)
 		return
 	}

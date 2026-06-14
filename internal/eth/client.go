@@ -20,6 +20,10 @@ func NewClient(rpcURL string) (*Client, error) {
 	return &Client{rpc: c}, nil
 }
 
+func (c *Client) Raw() *ethclient.Client {
+	return c.rpc
+}
+
 func (c *Client) Close() {
 	c.rpc.Close()
 }

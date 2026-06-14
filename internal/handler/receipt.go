@@ -35,7 +35,7 @@ func (h *Handler) Receipt(w http.ResponseWriter, r *http.Request) {
 
 	receipt, err := h.service.GetTransactionReceipt(ctx, common.HexToHash(hash))
 	if err != nil {
-		logger.Log.Fatal("get receipt error", zap.Error(err), zap.String("request_id", requestID))
+		logger.Log.Error("get receipt error", zap.Error(err), zap.String("request_id", requestID))
 		handleError(w, err)
 		return
 	}
