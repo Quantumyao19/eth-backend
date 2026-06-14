@@ -3,6 +3,8 @@ package listener
 import (
 	"context"
 	"eth-backend/internal/logger"
+	"eth-backend/internal/model"
+	"eth-backend/internal/repository"
 	"math/big"
 	"time"
 
@@ -17,12 +19,14 @@ import (
 type Listener struct {
 	client   *ethclient.Client
 	interval time.Duration
+	repo     *repository.TransferRepository
 }
 
-func NewListener(client *ethclient.Client) *Listener {
+func NewListener(client *ethclient.Client, repo *repository.TransferRepository) *Listener {
 	return &Listener{
 		client:   client,
 		interval: 5 * time.Second,
+		repo:     repo,
 	}
 }
 
@@ -58,8 +62,21 @@ func (l *Listener) loop(ctx context.Context) {
 				continue
 			}
 
+			var transfers []*model.Transfer
 			for _, vLog := range logs {
-				l.handleLog(vLog)
+				t := l.parseTransfer(vLog)
+				if t != nil {
+					transfers = append(transfers, t)
+				}
+			}
+
+			if len(transfers) > 0 {
+				inserted, err := l.repo.InsertMany(ctx, transfers)
+				if err != nil {
+					logger.Log.Error("batch insert error", zap.Error(err))
+				} else {
+					logger.Log.Info("batch insert completed", zap.Int("requested", len(transfers)), zap.Int64("inserted", inserted))
+				}
 			}
 
 			lastBlock = latestBlock
@@ -83,9 +100,9 @@ func (l *Listener) fetchLogs(ctx context.Context, from, to uint64) ([]types.Log,
 	return l.client.FilterLogs(ctx, query)
 }
 
-func (l *Listener) handleLog(vLog types.Log) {
+func (l *Listener) parseTransfer(vLog types.Log) *model.Transfer {
 	if len(vLog.Topics) < 3 {
-		return
+		return nil
 	}
 
 	from := common.HexToAddress(vLog.Topics[1].Hex())
@@ -93,9 +110,15 @@ func (l *Listener) handleLog(vLog types.Log) {
 
 	value := new(big.Int).SetBytes(vLog.Data)
 
-	logger.Log.Info("Token", zap.String("token", vLog.Address.Hex()))
-	logger.Log.Info("From", zap.String("from", from.String()))
-	logger.Log.Info("To", zap.String("to", to.String()))
-	logger.Log.Info("Value", zap.String("value", value.String()))
+	transfer := &model.Transfer{
+		TxHash:       vLog.TxHash.Hex(),
+		LogIndex:     uint(vLog.TxIndex),
+		BlockNumber:  vLog.BlockNumber,
+		TokenAddress: vLog.Address.Hex(),
+		From:         from.Hex(),
+		To:           to.Hex(),
+		Value:        value,
+	}
 
+	return transfer
 }

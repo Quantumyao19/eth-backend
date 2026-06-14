@@ -2,17 +2,21 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"eth-backend/config"
+	"eth-backend/internal/db"
 	"eth-backend/internal/eth"
 	"eth-backend/internal/handler"
 	"eth-backend/internal/listener"
 	"eth-backend/internal/logger"
+	"eth-backend/internal/repository"
 	"eth-backend/internal/server"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/doug-martin/goqu/v9"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
@@ -31,19 +35,35 @@ func main() {
 
 	client, err := eth.NewClient(cfg.Eth.RPCURL)
 	if err != nil {
-		log.Fatal(err)
+		logger.Log.Fatal("failed to create eth client", zap.Error(err))
 	}
 	defer client.Close()
 
 	service, err := eth.NewService(client, cfg.Eth)
 	if err != nil {
-		log.Fatal(err)
+		logger.Log.Fatal("failed to create eth service", zap.Error(err))
 	}
+
+	dbPool, err := db.NewPostgres(cfg.DB.URL)
+	if err != nil {
+		logger.Log.Fatal("failed to connect postgres", zap.Error(err))
+	}
+	defer dbPool.Close()
+
+	sqlDB, err := sql.Open("pgx", cfg.DB.URL)
+	if err != nil {
+		logger.Log.Fatal("failed to open sql DB", zap.Error(err))
+	}
+	defer sqlDB.Close()
+
+	gdb := goqu.New("postgres", sqlDB)
+
+	transferRepo := repository.NewTransferRepository(gdb)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	l := listener.NewListener(client.Raw())
+	l := listener.NewListener(client.Raw(), transferRepo)
 	l.Start(ctx)
 
 	h := handler.NewHandler(service)

@@ -7,6 +7,7 @@ import (
 type Config struct {
 	Server ServerConfig
 	Eth    EthConfig
+	DB     Database
 }
 
 type ServerConfig struct {
@@ -18,6 +19,10 @@ type EthConfig struct {
 	ChainID string
 }
 
+type Database struct {
+	URL string
+}
+
 func Load() *Config {
 	return &Config{
 		Server: ServerConfig{
@@ -26,6 +31,9 @@ func Load() *Config {
 		Eth: EthConfig{
 			RPCURL:  mustGetEnv("RPC_URL"),
 			ChainID: getEnv("CHAIN_ID", "11155111"),
+		},
+		DB: Database{
+			URL: getEnv("DB_URL", ""),
 		},
 	}
 }
