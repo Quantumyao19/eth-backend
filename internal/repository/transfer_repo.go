@@ -5,6 +5,7 @@ import (
 	"eth-backend/internal/model"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/google/uuid"
 )
 
 const (
@@ -23,12 +24,13 @@ func (r *TransferRepository) Insert(ctx context.Context, t *model.Transfer) erro
 	if t == nil {
 		return nil
 	}
-	return r.InsertMany(ctx, []*model.Transfer{t})
+	_, err := r.InsertMany(ctx, []*model.Transfer{t})
+	return err
 }
 
-func (r *TransferRepository) InsertMany(ctx context.Context, ts []*model.Transfer) error {
+func (r *TransferRepository) InsertMany(ctx context.Context, ts []*model.Transfer) (int64, error) {
 	if len(ts) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	records := make([]goqu.Record, 0, len(ts))
@@ -37,6 +39,7 @@ func (r *TransferRepository) InsertMany(ctx context.Context, ts []*model.Transfe
 			continue
 		}
 		records = append(records, goqu.Record{
+			"id":            uuid.NewString(),
 			"tx_hash":       t.TxHash,
 			"log_index":     t.LogIndex,
 			"block_number":  t.BlockNumber,
@@ -48,13 +51,20 @@ func (r *TransferRepository) InsertMany(ctx context.Context, ts []*model.Transfe
 	}
 
 	if len(records) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	if r.gdb == nil {
-		return nil
+		return 0, nil
 	}
 
-	_, err := r.gdb.Insert(tblTokenTransfers).Rows(records).OnConflict(goqu.DoNothing()).Executor().ExecContext(ctx)
-	return err
+	res, err := r.gdb.Insert(tblTokenTransfers).Rows(records).OnConflict(goqu.DoNothing()).Executor().ExecContext(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if res == nil {
+		return 0, nil
+	}
+	ra, _ := res.RowsAffected()
+	return ra, nil
 }

@@ -71,8 +71,11 @@ func (l *Listener) loop(ctx context.Context) {
 			}
 
 			if len(transfers) > 0 {
-				if err := l.repo.InsertMany(ctx, transfers); err != nil {
+				inserted, err := l.repo.InsertMany(ctx, transfers)
+				if err != nil {
 					logger.Log.Error("batch insert error", zap.Error(err))
+				} else {
+					logger.Log.Info("batch insert completed", zap.Int("requested", len(transfers)), zap.Int64("inserted", inserted))
 				}
 			}
 
@@ -84,9 +87,12 @@ func (l *Listener) loop(ctx context.Context) {
 func (l *Listener) fetchLogs(ctx context.Context, from, to uint64) ([]types.Log, error) {
 	transferSigHash := crypto.Keccak256Hash([]byte("Transfer(address,address,uint256)"))
 
+	testTokenAddress := common.HexToAddress("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238")
+
 	query := ethereum.FilterQuery{
 		FromBlock: big.NewInt(int64(from)),
 		ToBlock:   big.NewInt(int64(to)),
+		Addresses: []common.Address{testTokenAddress},
 		Topics: [][]common.Hash{
 			{
 				transferSigHash,

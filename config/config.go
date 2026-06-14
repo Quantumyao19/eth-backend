@@ -32,6 +32,9 @@ func Load() *Config {
 			RPCURL:  mustGetEnv("RPC_URL"),
 			ChainID: getEnv("CHAIN_ID", "11155111"),
 		},
+		DB: Database{
+			URL: getEnv("DB_URL", ""),
+		},
 	}
 }
 
