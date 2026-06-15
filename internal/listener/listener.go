@@ -22,10 +22,14 @@ type Listener struct {
 	repo     *repository.TransferRepository
 }
 
+const (
+	defaultInterval = 5 * time.Second
+)
+
 func NewListener(client *ethclient.Client, repo *repository.TransferRepository) *Listener {
 	return &Listener{
 		client:   client,
-		interval: 5 * time.Second,
+		interval: defaultInterval,
 		repo:     repo,
 	}
 }
@@ -109,6 +113,7 @@ func (l *Listener) parseTransfer(vLog types.Log) *model.Transfer {
 	to := common.HexToAddress(vLog.Topics[2].Hex())
 
 	value := new(big.Int).SetBytes(vLog.Data)
+	bigInt := model.BigInt{Int: value}
 
 	transfer := &model.Transfer{
 		TxHash:       vLog.TxHash.Hex(),
@@ -117,7 +122,7 @@ func (l *Listener) parseTransfer(vLog types.Log) *model.Transfer {
 		TokenAddress: vLog.Address.Hex(),
 		From:         from.Hex(),
 		To:           to.Hex(),
-		Value:        value,
+		Value:        bigInt,
 	}
 
 	return transfer

@@ -7,11 +7,15 @@ import (
 )
 
 type Server struct {
-	handler *handler.Handler
+	handler         *handler.Handler
+	transferHandler *handler.TransferHandler
 }
 
-func NewServer(h *handler.Handler) *Server {
-	return &Server{handler: h}
+func NewServer(h *handler.Handler, transferHandler *handler.TransferHandler) *Server {
+	return &Server{
+		handler:         h,
+		transferHandler: transferHandler,
+	}
 }
 
 func (s *Server) Start(port string) error {
@@ -22,6 +26,7 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/tx", s.handler.Transaction)
 	mux.HandleFunc("/receipt", s.handler.Receipt)
 	mux.HandleFunc("/tx/detail", s.handler.TxDetail)
+	mux.HandleFunc("/transfers", s.transferHandler.ListTransfer)
 
 	var h http.Handler = mux
 	h = middleware.RequestID(h)

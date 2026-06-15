@@ -67,7 +67,8 @@ func main() {
 	l.Start(ctx)
 
 	h := handler.NewHandler(service)
-	srv := server.NewServer(h)
+	repo := handler.NewTransferHandler(transferRepo)
+	srv := server.NewServer(h, repo)
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
