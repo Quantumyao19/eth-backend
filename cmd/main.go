@@ -44,13 +44,13 @@ func main() {
 		logger.Log.Fatal("failed to create eth service", zap.Error(err))
 	}
 
-	dbPool, err := db.NewPostgres(cfg.DB.URL)
+	dbPool, err := db.NewPostgres(cfg.DB.Postgres.URL)
 	if err != nil {
 		logger.Log.Fatal("failed to connect postgres", zap.Error(err))
 	}
 	defer dbPool.Close()
 
-	sqlDB, err := sql.Open("pgx", cfg.DB.URL)
+	sqlDB, err := sql.Open("pgx", cfg.DB.Postgres.URL)
 	if err != nil {
 		logger.Log.Fatal("failed to open sql DB", zap.Error(err))
 	}
@@ -67,7 +67,8 @@ func main() {
 	l.Start(ctx)
 
 	h := handler.NewHandler(service)
-	repo := handler.NewTransferHandler(transferRepo)
+	redisClient := db.NewRedisClient(cfg.DB.Redis.Addr, cfg.DB.Redis.Password, cfg.DB.Redis.DB)
+	repo := handler.NewTransferHandler(transferRepo, redisClient)
 	srv := server.NewServer(h, repo)
 
 	go func() {
