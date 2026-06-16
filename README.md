@@ -13,27 +13,6 @@ It reads blockchain data from an Ethereum node, stores token transfer events in 
 - Redis caching for `/transfers` responses
 - Request ID, logging, and panic recovery middleware
 
-## Requirements
-
-- Go 1.26+
-- Ethereum JSON-RPC endpoint
-- PostgreSQL
-- Redis
-
-## Environment
-
-Copy `.env.example` to `.env` and fill in the values.
-
-```env
-PORT=8080
-RPC_URL=your_rpc_url_here
-CHAIN_ID=11155111
-DB_URL=your_db_url_here
-REDIS_ADDR=localhost:6379
-REDIS_PASSWORD=
-REDIS_DB=0
-```
-
 ### Notes
 
 - `RPC_URL` is required.
