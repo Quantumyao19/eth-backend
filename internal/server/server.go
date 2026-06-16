@@ -29,8 +29,8 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/transfers", s.transferHandler.ListTransfer)
 
 	var h http.Handler = mux
-	h = middleware.RequestID(h)
-	h = middleware.Recover(h)
 	h = middleware.Logging(h)
+	h = middleware.Recover(h)
+	h = middleware.RequestID(h)
 	return http.ListenAndServe(":"+port, h)
 }

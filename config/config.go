@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 )
 
 type Config struct {
@@ -20,7 +21,18 @@ type EthConfig struct {
 }
 
 type Database struct {
+	Postgres PostgreSQL
+	Redis    Redis
+}
+
+type PostgreSQL struct {
 	URL string
+}
+
+type Redis struct {
+	Addr     string
+	Password string
+	DB       int
 }
 
 func Load() *Config {
@@ -33,7 +45,14 @@ func Load() *Config {
 			ChainID: getEnv("CHAIN_ID", "11155111"),
 		},
 		DB: Database{
-			URL: getEnv("DB_URL", ""),
+			Postgres: PostgreSQL{
+				URL: getEnv("DB_URL", ""),
+			},
+			Redis: Redis{
+				Addr:     getEnv("REDIS_ADDR", "localhost:6379"),
+				Password: getEnv("REDIS_PASSWORD", ""),
+				DB:       getEnvInt("REDIS_DB", 0),
+			},
 		},
 	}
 }
@@ -51,4 +70,13 @@ func mustGetEnv(key string) string {
 		panic("missing required env: " + key)
 	}
 	return v
+}
+
+func getEnvInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if intVal, err := strconv.Atoi(v); err == nil {
+			return intVal
+		}
+	}
+	return fallback
 }
