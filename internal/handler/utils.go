@@ -5,10 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 )
 
 type ErrorResponse struct {
 	Error string `json:"error"`
+}
+
+var ethereumAddressRegex = regexp.MustCompile("^0x[a-fA-F0-9]{40}$")
+
+func isValidEthereumAddress(address string) bool {
+	return ethereumAddressRegex.MatchString(address)
 }
 
 func writeError(w http.ResponseWriter, message string, status int) {
