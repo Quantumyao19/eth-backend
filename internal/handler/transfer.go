@@ -7,6 +7,7 @@ import (
 	"eth-backend/internal/middleware"
 	"eth-backend/internal/repository"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
@@ -27,7 +28,8 @@ const (
 	emptyResultCacheTTL  = 1 * time.Minute
 	transferLockTTL      = 3 * time.Second
 	cacheWaitRetries     = 6
-	cacheWaitInterval    = 50 * time.Millisecond
+	cacheMinInterval     = 30 * time.Millisecond
+	cacheMaxInterval     = 300 * time.Millisecond
 )
 
 func NewTransferHandler(repo *repository.TransferRepository, redisClient *redis.Client) *TransferHandler {
@@ -92,8 +94,9 @@ func (handler *TransferHandler) ListTransfer(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err == nil {
+		cacheWaitInterval := cacheMinInterval
 		for i := 0; i < cacheWaitRetries; i++ {
-			timer := time.NewTimer(cacheWaitInterval)
+			timer := time.NewTimer(jitterCacheWaitInterval(cacheWaitInterval))
 			select {
 			case <-ctx.Done():
 				timer.Stop()
@@ -112,6 +115,11 @@ func (handler *TransferHandler) ListTransfer(w http.ResponseWriter, r *http.Requ
 				logger.Log.Warn("redis cache retry failed", zap.Error(err), zap.String("cache_key", cacheKey), zap.String("request_id", requestID))
 				break
 			}
+
+			cacheWaitInterval *= 2
+			if cacheWaitInterval > cacheMaxInterval {
+				cacheWaitInterval = cacheMaxInterval
+			}
 		}
 	}
 
@@ -121,6 +129,20 @@ func (handler *TransferHandler) ListTransfer(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, resp)
+}
+
+func jitterCacheWaitInterval(interval time.Duration) time.Duration {
+	jitterRange := interval * 4 / 10
+	if jitterRange <= 0 {
+		return interval
+	}
+
+	waitInterval := interval*8/10 + time.Duration(rand.Int63n(int64(jitterRange)))
+	if waitInterval > cacheMaxInterval {
+		return cacheMaxInterval
+	}
+
+	return waitInterval
 }
 
 func writeCachedJSON(w http.ResponseWriter, cached string) {
