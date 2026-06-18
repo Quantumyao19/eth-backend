@@ -64,5 +64,7 @@ Then open API requests at `http://localhost:8080`.
 ## Redis Cache Behavior
 
 - `/transfers` uses a Redis key in the form `transfer:list:<address>:<page>:<page_size>`.
-- On cache miss, the handler queries PostgreSQL, then writes the response to Redis.
-- The response is cached for a short duration before expiring.
+- On cache miss, the handler tries to acquire a short Redis lock for the same query.
+- The lock holder queries PostgreSQL, writes the response to Redis, then releases the lock.
+- Other requests wait briefly and retry Redis with exponential backoff and random jitter.
+- If the cache is still unavailable after retries, the request falls back to querying PostgreSQL.
