@@ -1,8 +1,7 @@
 services:
   postgres:
     image: postgres:15
-    container_name: postgres
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -19,8 +18,7 @@ services:
 
   redis:
     image: redis:7.2
-    container_name: redis
-    restart: always
+    restart: unless-stopped
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
     ports:
       - "6379:6379"
@@ -29,17 +27,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-        
+
+  migrate:
+    build: .
+    command: ["./main","migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
 
   app:
     build: .
-    container_name: eth-backend
-    restart: always
+    restart: unless-stopped
+    command: ["./main"]
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
       - .env
     ports:
