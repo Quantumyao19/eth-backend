@@ -3,9 +3,9 @@ package bootstrap
 import (
 	"database/sql"
 	"embed"
-	"eth-backend/config"
 	"eth-backend/internal/logger"
 	"fmt"
+	"os"
 	"strconv"
 	"time"
 
@@ -13,7 +13,6 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
@@ -28,12 +27,11 @@ func RunMigrationCommand(cmd string, arg string) error {
 	logger.Init()
 	defer logger.Sync()
 
-	if err := godotenv.Load(); err != nil {
-		logger.Log.Warn("failed to load .env file", zap.Error(err))
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		return fmt.Errorf("missing DB_URL")
 	}
-
-	cfg := config.Load()
-	return RunMigration(cfg.DB.Postgres.URL, cmd, arg)
+	return RunMigration(dbURL, cmd, arg)
 }
 
 func RunMigration(dbURL, cmd, arg string) error {
