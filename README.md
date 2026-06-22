@@ -11,6 +11,7 @@ The service connects to an Ethereum JSON-RPC endpoint, exposes HTTP APIs for acc
 - Poll ERC-20 `Transfer(address,address,uint256)` logs and persist them to PostgreSQL
 - List transfer history by address with pagination
 - Cache transfer list responses in Redis with a short lock to reduce duplicate database reads
+- Run database migrations with built-in `up`, `down`, and `version` commands
 - Request ID, structured logging, panic recovery, and graceful shutdown
 
 ## Tech Stack
@@ -21,23 +22,25 @@ The service connects to an Ethereum JSON-RPC endpoint, exposes HTTP APIs for acc
 - Redis
 - pgx
 - goqu
+- golang-migrate
 - zap
 - Docker Compose
 
 ## Project Structure
 
 ```text
-cmd/                    Application entry point
-config/                 Environment configuration
-internal/bootstrap/     Dependency wiring and startup flow
-internal/db/            PostgreSQL, Redis, and DDL
-internal/eth/           Ethereum RPC client and service layer
-internal/handler/       HTTP handlers
-internal/listener/      ERC-20 transfer log listener
-internal/middleware/    Request ID, logging, and recovery middleware
-internal/repository/    Transfer data access layer
-internal/server/        HTTP route registration
-utils/                  Shared helper functions
+cmd/                         Application entry point
+config/                      Environment configuration
+internal/bootstrap/          Dependency wiring, startup flow, and migrations
+internal/bootstrap/migrations/ SQL migration files
+internal/db/                 PostgreSQL and Redis clients
+internal/eth/                Ethereum RPC client and service layer
+internal/handler/            HTTP handlers
+internal/listener/           ERC-20 transfer log listener
+internal/middleware/         Request ID, logging, and recovery middleware
+internal/repository/         Transfer data access layer
+internal/server/             HTTP route registration
+utils/                       Shared helper functions
 ```
 
 ## Configuration
@@ -54,6 +57,9 @@ Required variables:
 | --- | --- |
 | `RPC_URL` | Ethereum JSON-RPC URL |
 | `DB_URL` | PostgreSQL connection string |
+| `POSTGRES_USER` | PostgreSQL user used by Docker Compose |
+| `POSTGRES_PASSWORD` | PostgreSQL password used by Docker Compose |
+| `POSTGRES_DB` | PostgreSQL database used by Docker Compose |
 
 Optional variables:
 
@@ -65,63 +71,87 @@ Optional variables:
 | `REDIS_PASSWORD` | Empty | Redis password |
 | `REDIS_DB` | `0` | Redis database number |
 
-For Docker Compose, use service names instead of `localhost`:
+For Docker Compose, use service names:
 
 ```env
 DB_URL=postgres://<user>:<password>@postgres:5432/<database>?sslmode=disable
 REDIS_ADDR=redis:6379
 REDIS_PASSWORD=<redis_password>
+POSTGRES_USER=<user>
+POSTGRES_PASSWORD=<password>
+POSTGRES_DB=<database>
 ```
 
-For running the app locally while PostgreSQL and Redis run in Docker:
+For running the app locally while PostgreSQL and Redis run in Docker, use localhost:
 
 ```env
 DB_URL=postgres://<user>:<password>@localhost:5432/<database>?sslmode=disable
 REDIS_ADDR=localhost:6379
 REDIS_PASSWORD=<redis_password>
+POSTGRES_USER=<user>
+POSTGRES_PASSWORD=<password>
+POSTGRES_DB=<database>
 ```
 
-## Database Setup
+## Database Migrations
 
-The app expects the `token_transfers` table to exist. Run the DDL before starting the service:
-
-```powershell
-docker compose up -d postgres
-Get-Content internal/db/ddl/001_create_token_transfers_table.up.sql | docker exec -i postgres psql -U <user> -d <database>
-```
-
-DDL file:
+Migrations live in:
 
 ```text
-internal/db/ddl/001_create_token_transfers_table.up.sql
+internal/bootstrap/migrations
 ```
 
-## Run Locally
-
-Start PostgreSQL and Redis:
-
-```powershell
-docker compose up -d postgres redis
-```
-
-Start the Go service:
-
-```powershell
-go run ./cmd
-```
-
-The server listens on:
+Migration files must use the `golang-migrate` naming format:
 
 ```text
-http://localhost:8080
+001_init.up.sql
+001_init.down.sql
+002_add_status_column.up.sql
+002_add_status_column.down.sql
 ```
+
+Run all pending migrations:
+
+```powershell
+go run ./cmd migrate up
+```
+
+Rollback the latest migration:
+
+```powershell
+go run ./cmd migrate down
+```
+
+Rollback multiple migrations:
+
+```powershell
+go run ./cmd migrate down 2
+```
+
+Check the current migration version:
+
+```powershell
+go run ./cmd migrate version
+```
+
+When using Docker Compose, the `migrate` service runs `./main migrate up` automatically before the app starts.
 
 ## Run with Docker Compose
 
-After creating `.env` and initializing the database table:
+After creating `.env`, start the full stack:
 
 ```powershell
 docker compose up --build
+```
+
+Docker Compose starts PostgreSQL and Redis, runs database migrations, and then starts the app.
+
+To run only migrations through Docker Compose:
+
+```powershell
+docker compose run migrate ./main migrate up
+docker compose run migrate ./main migrate down
+docker compose run migrate ./main migrate version
 ```
 
 ## API Endpoints
