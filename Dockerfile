@@ -14,6 +14,5 @@ FROM alpine:latest
 WORKDIR /root/
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /app/main .
-RUN chmod +x ./main
 
 CMD ["./main"]
