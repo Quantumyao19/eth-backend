@@ -34,7 +34,12 @@ jobs:
         run: go build -o main ./cmd
 
       - name: Wait for Postgres
-        run: sleep 5
+        run: |
+          for i in {1..10}; do
+            pg_isready -h localhost -p 5432 && break
+            echo "Waiting for postgres..."
+            sleep 2
+          done
 
       - name: Run Migration
         run: ./main migrate up
