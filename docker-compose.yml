@@ -30,7 +30,8 @@ services:
 
   migrate:
     build: .
-    command: ["./main","migrate"]
+    image: eth-backend-migrate
+    command: ["./main","migrate","up"]
     depends_on:
       postgres:
         condition: service_healthy
