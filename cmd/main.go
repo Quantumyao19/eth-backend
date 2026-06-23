@@ -2,7 +2,10 @@ package main
 
 import (
 	"eth-backend/internal/bootstrap"
+	"eth-backend/internal/logger"
 	"os"
+
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -19,6 +22,7 @@ func main() {
 		}
 
 		if err := bootstrap.RunMigrationCommand(cmd, arg); err != nil {
+			logger.Log.Error("migration error", zap.Error(err))
 			os.Exit(1)
 		}
 		return
