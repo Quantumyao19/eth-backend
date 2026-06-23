@@ -1,210 +1,151 @@
 # eth-backend
 
-A Go backend service for querying Ethereum data and indexing ERC-20 transfer events.
+Go backend for reading Ethereum data and indexing ERC-20 transfer logs.
 
-The service connects to an Ethereum JSON-RPC endpoint, exposes HTTP APIs for account and transaction data, listens for ERC-20 `Transfer` logs, stores indexed transfer records in PostgreSQL, and uses Redis to cache transfer history queries.
+It connects to an Ethereum JSON-RPC node, exposes simple HTTP APIs, stores parsed `Transfer` events in PostgreSQL, and caches transfer list queries in Redis.
 
 ## Features
 
-- Query ETH balance, latest block number, transaction data, and transaction receipts
-- Parse transaction details, including gas usage, logs, ERC-20 `Transfer`, and `Approval` events
-- Poll ERC-20 `Transfer(address,address,uint256)` logs and persist them to PostgreSQL
-- List transfer history by address with pagination
-- Cache transfer list responses in Redis with a short lock to reduce duplicate database reads
-- Run database migrations with built-in `up`, `down`, and `version` commands
-- Request ID, structured logging, panic recovery, and graceful shutdown
+- Query ETH balance, latest block, transaction, and receipt
+- Parse transaction logs for ERC-20 `Transfer` and `Approval` events
+- Poll chain logs for `Transfer(address,address,uint256)`
+- Store token transfer records in PostgreSQL
+- Cache transfer list responses in Redis
+- Run SQL migrations from the app binary
 
-## Tech Stack
+## Stack
 
 - Go 1.26.2
 - go-ethereum
 - PostgreSQL
 - Redis
-- pgx
-- goqu
-- golang-migrate
-- zap
+- goqu / pgx
 - Docker Compose
 
 ## Project Structure
 
 ```text
-cmd/                         Application entry point
-config/                      Environment configuration
-internal/bootstrap/          Dependency wiring, startup flow, and migrations
-internal/bootstrap/migrations/ SQL migration files
-internal/db/                 PostgreSQL and Redis clients
-internal/eth/                Ethereum RPC client and service layer
+cmd/                         app entry
+config/                      env config
+internal/bootstrap/          startup and migrations
+internal/bootstrap/migrations SQL migrations
+internal/db/                 postgres and redis clients
+internal/eth/                Ethereum RPC service
 internal/handler/            HTTP handlers
-internal/listener/           ERC-20 transfer log listener
-internal/middleware/         Request ID, logging, and recovery middleware
-internal/repository/         Transfer data access layer
-internal/server/             HTTP route registration
-utils/                       Shared helper functions
+internal/listener/           ERC-20 transfer listener
+internal/repository/         database access
+internal/server/             routes and HTTP server
+utils/                       shared helpers
 ```
 
-## Configuration
+## Config
 
-Create a `.env` file from the example:
+Create `.env` from the example:
 
 ```powershell
 cp .env.example .env
 ```
 
-Required variables:
-
-| Variable | Description |
-| --- | --- |
-| `RPC_URL` | Ethereum JSON-RPC URL |
-| `DB_URL` | PostgreSQL connection string |
-| `POSTGRES_USER` | PostgreSQL user used by Docker Compose |
-| `POSTGRES_PASSWORD` | PostgreSQL password used by Docker Compose |
-| `POSTGRES_DB` | PostgreSQL database used by Docker Compose |
-
-Optional variables:
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `PORT` | `8080` | HTTP server port |
-| `CHAIN_ID` | `11155111` | Ethereum chain ID, defaulting to Sepolia |
-| `REDIS_ADDR` | `localhost:6379` | Redis address |
-| `REDIS_PASSWORD` | Empty | Redis password |
-| `REDIS_DB` | `0` | Redis database number |
-
-For Docker Compose, use service names:
+Required:
 
 ```env
-DB_URL=postgres://<user>:<password>@postgres:5432/<database>?sslmode=disable
+RPC_URL=your_rpc_url_here
+DB_URL=postgres://user:password@postgres:5432/db?sslmode=disable
+POSTGRES_USER=user
+POSTGRES_PASSWORD=password
+POSTGRES_DB=db
+REDIS_PASSWORD=password
+```
+
+Optional:
+
+```env
+PORT=8080
+CHAIN_ID=11155111
 REDIS_ADDR=redis:6379
-REDIS_PASSWORD=<redis_password>
-POSTGRES_USER=<user>
-POSTGRES_PASSWORD=<password>
-POSTGRES_DB=<database>
+REDIS_DB=0
 ```
 
-For running the app locally while PostgreSQL and Redis run in Docker, use localhost:
+When running the app locally but PostgreSQL/Redis in Docker, use:
 
 ```env
-DB_URL=postgres://<user>:<password>@localhost:5432/<database>?sslmode=disable
+DB_URL=postgres://user:password@localhost:5432/db?sslmode=disable
 REDIS_ADDR=localhost:6379
-REDIS_PASSWORD=<redis_password>
-POSTGRES_USER=<user>
-POSTGRES_PASSWORD=<password>
-POSTGRES_DB=<database>
 ```
 
-## Database Migrations
+## Run
 
-Migrations live in:
-
-```text
-internal/bootstrap/migrations
-```
-
-Migration files must use the `golang-migrate` naming format:
-
-```text
-001_init.up.sql
-001_init.down.sql
-002_add_status_column.up.sql
-002_add_status_column.down.sql
-```
-
-Run all pending migrations:
-
-```powershell
-go run ./cmd migrate up
-```
-
-Rollback the latest migration:
-
-```powershell
-go run ./cmd migrate down
-```
-
-Rollback multiple migrations:
-
-```powershell
-go run ./cmd migrate down 2
-```
-
-Check the current migration version:
-
-```powershell
-go run ./cmd migrate version
-```
-
-When using Docker Compose, the `migrate` service runs `./main migrate up` automatically before the app starts.
-
-## Run with Docker Compose
-
-After creating `.env`, start the full stack:
+Start the full stack:
 
 ```powershell
 docker compose up --build
 ```
 
-Docker Compose starts PostgreSQL and Redis, runs database migrations, and then starts the app.
-
-To run only migrations through Docker Compose:
+Run locally:
 
 ```powershell
-docker compose run migrate ./main migrate up
-docker compose run migrate ./main migrate down
-docker compose run migrate ./main migrate version
+go run ./cmd
 ```
 
-## API Endpoints
+## Migrations
 
-### `GET /balance`
+```powershell
+go run ./cmd migrate up
+go run ./cmd migrate down
+go run ./cmd migrate version
+```
 
-Query ETH balance by address.
+Migration files are in:
+
+```text
+internal/bootstrap/migrations
+```
+
+## APIs
+
+### Balance
 
 ```http
 GET /balance?address=<ETH_ADDRESS>
 ```
 
-### `GET /block`
-
-Get the latest block number.
+### Latest Block
 
 ```http
 GET /block
 ```
 
-### `GET /tx`
-
-Get basic transaction data by transaction hash.
+### Transaction
 
 ```http
 GET /tx?hash=<TX_HASH>
 ```
 
-### `GET /receipt`
-
-Get transaction receipt data.
+### Receipt
 
 ```http
 GET /receipt?hash=<TX_HASH>
 ```
 
-### `GET /tx/detail`
+### Transaction Detail
 
-Get transaction details, raw logs, and parsed ERC-20 `Transfer` / `Approval` events.
+Returns transaction info, raw logs, parsed ERC-20 transfers, and approvals.
 
 ```http
 GET /tx/detail?hash=<TX_HASH>
 ```
 
-### `GET /transfers`
+### Transfers
 
-List ERC-20 transfer records where the address appears as sender or recipient.
+Lists indexed ERC-20 transfer records by address.
 
 ```http
 GET /transfers?address=<ETH_ADDRESS>&page=1&page_size=20
 ```
 
-Response shape:
+Current query behavior matches records where the address is in `from_address`, `to_address`, or `token_address`.
+
+Response:
 
 ```json
 {
@@ -217,12 +158,14 @@ Response shape:
 
 ## Transfer Indexing
 
-The listener checks the latest block every 5 seconds and fetches ERC-20 `Transfer` logs by block range. Parsed records are inserted into `token_transfers` with a unique index on `(tx_hash, log_index)` to avoid duplicate writes.
+The listener polls every 5 seconds, fetches ERC-20 `Transfer` logs, and stores:
 
-Transfer list queries are cached in Redis using:
+- `tx_hash`
+- `log_index`
+- `block_number`
+- `token_address`
+- `from_address`
+- `to_address`
+- `value`
 
-```text
-transfer:list:<address>:<page>:<page_size>
-```
-
-On cache miss, the handler uses a short Redis lock so only one request refreshes the same query result while other requests briefly retry the cache.
+Duplicate records are ignored by the unique index on `(tx_hash, log_index)`.

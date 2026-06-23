@@ -5,6 +5,7 @@ import (
 	"eth-backend/internal/logger"
 	"eth-backend/internal/model"
 	"eth-backend/internal/repository"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -20,17 +22,19 @@ type Listener struct {
 	client   *ethclient.Client
 	interval time.Duration
 	repo     *repository.TransferRepository
+	redis    *redis.Client
 }
 
 const (
 	defaultInterval = 5 * time.Second
 )
 
-func NewListener(client *ethclient.Client, repo *repository.TransferRepository) *Listener {
+func NewListener(client *ethclient.Client, repo *repository.TransferRepository, redis *redis.Client) *Listener {
 	return &Listener{
 		client:   client,
 		interval: defaultInterval,
 		repo:     repo,
+		redis:    redis,
 	}
 }
 
@@ -49,41 +53,54 @@ func (l *Listener) loop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			latestBlock, err := l.client.BlockNumber(ctx)
+			ctxCycle, cancel := context.WithTimeout(ctx, 10*time.Second)
+
+			latestBlock, err := l.client.BlockNumber(ctxCycle)
+
 			if err != nil {
 				logger.Log.Error("get block error", zap.Error(err))
+				cancel()
 				continue
 			}
 
 			if lastBlock == 0 {
 				lastBlock = latestBlock - 5
+				cancel()
 				continue
 			}
 
-			logs, err := l.fetchLogs(ctx, lastBlock, latestBlock)
+			logs, err := l.fetchLogs(ctxCycle, lastBlock, latestBlock)
+			cancel()
 			if err != nil {
 				logger.Log.Error("fetch logs error", zap.Error(err))
 				continue
 			}
 
 			var transfers []*model.Transfer
+			addressSet := make(map[string]struct{})
+
 			for _, vLog := range logs {
 				t := l.parseTransfer(vLog)
 				if t != nil {
 					transfers = append(transfers, t)
+
+					addressSet[t.From] = struct{}{}
+					addressSet[t.To] = struct{}{}
 				}
 			}
 
 			if len(transfers) > 0 {
-				inserted, err := l.repo.InsertMany(ctx, transfers)
+				inserted, err := l.repo.InsertMany(ctxCycle, transfers)
 				if err != nil {
 					logger.Log.Error("batch insert error", zap.Error(err))
 				} else {
 					logger.Log.Info("batch insert completed", zap.Int("requested", len(transfers)), zap.Int64("inserted", inserted))
+					l.invalidTransaferCache(ctx, addressSet)
 				}
 			}
 
 			lastBlock = latestBlock
+			cancel()
 		}
 	}
 }
@@ -126,4 +143,23 @@ func (l *Listener) parseTransfer(vLog types.Log) *model.Transfer {
 	}
 
 	return transfer
+}
+
+func (l *Listener) invalidTransaferCache(ctx context.Context, addressSet map[string]struct{}) {
+	for address := range addressSet {
+		indexKey := fmt.Sprintf("transfer:index:%s", address)
+
+		keys, err := l.redis.SMembers(ctx, indexKey).Result()
+		if err != nil {
+			logger.Log.Warn("get cache index failed", zap.Error(err), zap.String("address", address))
+			return
+		}
+
+		if len(keys) > 0 {
+			if err := l.redis.Del(ctx, indexKey).Err(); err != nil {
+				logger.Log.Warn("delete index key failed", zap.Error(err), zap.String("indexKey", indexKey))
+			}
+
+		}
+	}
 }

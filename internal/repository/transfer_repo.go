@@ -77,7 +77,6 @@ func (r *TransferRepository) ListByAddress(ctx context.Context, address string, 
 	whereCondition := goqu.Or(
 		goqu.Ex{"from_address": address},
 		goqu.Ex{"to_address": address},
-		goqu.Ex{"token_address": address},
 	)
 
 	err := r.gdb.From(tblTokenTransfers).Where(whereCondition).
