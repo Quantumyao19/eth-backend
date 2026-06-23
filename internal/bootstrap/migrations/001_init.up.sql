@@ -22,5 +22,3 @@ CREATE INDEX IF NOT EXISTS idx_to_address
 
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_transfer 
     ON public.token_transfers USING BTREE (tx_hash, log_index);
-
-ALTER TABLE IF EXISTS public.token_transfers OWNER TO admin;
