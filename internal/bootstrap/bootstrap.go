@@ -71,7 +71,7 @@ func Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	l := listener.NewListener(client.Raw(), transferRepo)
+	l := listener.NewListener(client.Raw(), transferRepo, redisClient)
 	l.Start(ctx)
 
 	sigCh := make(chan os.Signal, 1)

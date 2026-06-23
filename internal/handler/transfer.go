@@ -26,7 +26,7 @@ const (
 	defaultPageSize      = 20
 	transferListCacheTTL = 1 * time.Minute
 	emptyResultCacheTTL  = 1 * time.Minute
-	transferLockTTL      = 3 * time.Second
+	transferLockTTL      = 10 * time.Second
 	cacheWaitRetries     = 6
 	cacheMinInterval     = 30 * time.Millisecond
 	cacheMaxInterval     = 300 * time.Millisecond
@@ -194,6 +194,13 @@ func (handler *TransferHandler) queryAndCacheTransfers(ctx context.Context, cach
 	if err := handler.redis.Set(ctx, cacheKey, jsonBytes, cacheTTL).Err(); err != nil {
 		logger.Log.Warn("failed to set transfer cache", zap.Error(err), zap.String("cache_key", cacheKey), zap.String("request_id", requestID))
 	}
+
+	indexKey := fmt.Sprintf("transfer:index:%s", address)
+	if err := handler.redis.SAdd(ctx, indexKey, cacheKey).Err(); err != nil {
+		logger.Log.Warn("failed to add cache index", zap.Error(err))
+	}
+
+	handler.redis.Expire(ctx, indexKey, transferListCacheTTL)
 
 	return resp, nil
 }
