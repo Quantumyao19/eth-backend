@@ -1,3 +1,4 @@
 # .gitignore
 .env
 secrets/
+k8s/secret.yml
