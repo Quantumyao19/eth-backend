@@ -2,27 +2,28 @@ apiVersion: apps/v1
 kind: Deployment
 
 metadata:
-  name: eth-backend
+  name: postgres
 
 spec:
   replicas: 1
 
   selector:
     matchLabels:
-      app: eth-backend
+      app: postgres
 
   template:
     metadata:
       labels:
-        app: eth-backend
+        app: postgres
 
     spec:
       containers:
-        - name: eth-backend
-          image: eth-backend-app:latest
-          imagePullPolicy: Never
+        - name: postgres
+          image: postgres:15.5
+
+          ports:
+            - containerPort: 5432
+
           envFrom:
-            - configMapRef:
-                name: eth-backend-config
             - secretRef:
                 name: eth-backend-secret
