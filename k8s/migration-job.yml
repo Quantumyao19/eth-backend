@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: eth-backend-migration
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: migration
+          image: eth-backend-app:latest
+
+          command: ["./main"]
+          args: ["migrate","up"]
+
+          imagePullPolicy: Never
+
+          envFrom:
+            - configMapRef:
+                name: eth-backend-config
+            - secretRef:
+                name: eth-backend-secret
