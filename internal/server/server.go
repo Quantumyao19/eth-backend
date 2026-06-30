@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"eth-backend/internal/handler"
+	"eth-backend/internal/health"
 	"eth-backend/internal/middleware"
 	"net/http"
 )
@@ -10,13 +11,15 @@ import (
 type Server struct {
 	handler         *handler.Handler
 	transferHandler *handler.TransferHandler
+	healthHandler   *health.HealthHandler
 	httpServer      *http.Server
 }
 
-func NewServer(h *handler.Handler, transferHandler *handler.TransferHandler) *Server {
+func NewServer(h *handler.Handler, transferHandler *handler.TransferHandler, healthHandler *health.HealthHandler) *Server {
 	return &Server{
 		handler:         h,
 		transferHandler: transferHandler,
+		healthHandler:   healthHandler,
 	}
 }
 
@@ -29,6 +32,9 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/receipt", s.handler.Receipt)
 	mux.HandleFunc("/tx/detail", s.handler.TxDetail)
 	mux.HandleFunc("/transfers", s.transferHandler.ListTransfer)
+	mux.HandleFunc("/health/live", s.healthHandler.Live)
+	mux.HandleFunc("/health/ready", s.healthHandler.Ready)
+	mux.HandleFunc("/health/startup", s.healthHandler.Startup)
 
 	var h http.Handler = mux
 	h = middleware.Logging(h)
