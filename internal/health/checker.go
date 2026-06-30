@@ -2,7 +2,6 @@ package health
 
 import (
 	"context"
-	"eth-backend/internal/eth"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -16,14 +15,12 @@ const (
 type Checker struct {
 	DB    *goqu.Database
 	Redis *redis.Client
-	RPC   *eth.Service
 }
 
-func NewChecker(db *goqu.Database, redisClient *redis.Client, rpc *eth.Service) *Checker {
+func NewChecker(db *goqu.Database, redisClient *redis.Client) *Checker {
 	return &Checker{
 		DB:    db,
 		Redis: redisClient,
-		RPC:   rpc,
 	}
 }
 
@@ -42,12 +39,4 @@ func (c *Checker) checkRedis(ctx context.Context) error {
 	defer cancel()
 
 	return c.Redis.Ping(ctx).Err()
-}
-
-func (c *Checker) checkRPC(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, timeoutForHealthCheck)
-	defer cancel()
-
-	_, err := c.RPC.GetBlockNumber(ctx)
-	return err
 }
