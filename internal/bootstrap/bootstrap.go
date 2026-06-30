@@ -67,7 +67,7 @@ func Run() error {
 
 	h := handler.NewHandler(service)
 	transferHandler := handler.NewTransferHandler(transferRepo, redisClient)
-	checker := health.NewChecker(gdb, redisClient, service)
+	checker := health.NewChecker(gdb, redisClient)
 	healthHandler := health.NewHealthHandler(checker)
 	srv := server.NewServer(h, transferHandler, healthHandler)
 

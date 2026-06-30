@@ -3,15 +3,18 @@ package eth
 import (
 	"context"
 	"eth-backend/config"
+	"eth-backend/internal/logger"
 	"eth-backend/utils"
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"go.uber.org/zap"
 )
 
 const erc20MetaABI = `[
@@ -38,9 +41,12 @@ type Service struct {
 }
 
 func NewService(client *Client, cfg config.EthConfig) (*Service, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
 	chainID, err := client.rpc.ChainID(ctx)
 	if err != nil {
+		logger.Log.Error("chainID error", zap.Error(err))
 		return nil, err
 	}
 
