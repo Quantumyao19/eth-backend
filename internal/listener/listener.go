@@ -53,54 +53,56 @@ func (l *Listener) loop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			ctxCycle, cancel := context.WithTimeout(ctx, 10*time.Second)
+			func() {
+				ctxCycle, cancel := context.WithTimeout(ctx, 10*time.Second)
+				defer cancel()
 
-			latestBlock, err := l.client.BlockNumber(ctxCycle)
+				latestBlock, err := l.client.BlockNumber(ctxCycle)
 
-			if err != nil {
-				logger.Log.Error("get block error", zap.Error(err))
-				cancel()
-				continue
-			}
-
-			if lastBlock == 0 {
-				lastBlock = latestBlock - 5
-				cancel()
-				continue
-			}
-
-			logs, err := l.fetchLogs(ctxCycle, lastBlock, latestBlock)
-			cancel()
-			if err != nil {
-				logger.Log.Error("fetch logs error", zap.Error(err))
-				continue
-			}
-
-			var transfers []*model.Transfer
-			addressSet := make(map[string]struct{})
-
-			for _, vLog := range logs {
-				t := l.parseTransfer(vLog)
-				if t != nil {
-					transfers = append(transfers, t)
-
-					addressSet[t.From] = struct{}{}
-					addressSet[t.To] = struct{}{}
-				}
-			}
-
-			if len(transfers) > 0 {
-				inserted, err := l.repo.InsertMany(ctxCycle, transfers)
 				if err != nil {
-					logger.Log.Error("batch insert error", zap.Error(err))
-				} else {
-					logger.Log.Info("batch insert completed", zap.Int("requested", len(transfers)), zap.Int64("inserted", inserted))
-					l.invalidTransaferCache(ctx, addressSet)
+					logger.Log.Error("get block error", zap.Error(err))
+					return
 				}
-			}
 
-			lastBlock = latestBlock
-			cancel()
+				if lastBlock == 0 {
+					lastBlock = latestBlock - 5
+					return
+				}
+
+				logs, err := l.fetchLogs(ctxCycle, lastBlock, latestBlock)
+				if err != nil {
+					logger.Log.Error("fetch logs error", zap.Error(err))
+					return
+				}
+
+				var transfers []*model.Transfer
+				addressSet := make(map[string]struct{})
+
+				for _, vLog := range logs {
+					t := l.parseTransfer(vLog)
+					if t != nil {
+						transfers = append(transfers, t)
+
+						addressSet[t.From] = struct{}{}
+						addressSet[t.To] = struct{}{}
+					}
+				}
+
+				if len(transfers) > 0 {
+					inserted, err := l.repo.InsertMany(ctxCycle, transfers)
+					if err != nil {
+						logger.Log.Error("batch insert error", zap.Error(err))
+						return
+					} else {
+						logger.Log.Info("batch insert completed", zap.Int("requested", len(transfers)), zap.Int64("inserted", inserted))
+						l.invalidateTransaferCache(ctxCycle, addressSet)
+					}
+				}
+
+				lastBlock = latestBlock
+
+			}()
+
 		}
 	}
 }
@@ -145,7 +147,7 @@ func (l *Listener) parseTransfer(vLog types.Log) *model.Transfer {
 	return transfer
 }
 
-func (l *Listener) invalidTransaferCache(ctx context.Context, addressSet map[string]struct{}) {
+func (l *Listener) invalidateTransaferCache(ctx context.Context, addressSet map[string]struct{}) {
 	for address := range addressSet {
 		indexKey := fmt.Sprintf("transfer:index:%s", address)
 

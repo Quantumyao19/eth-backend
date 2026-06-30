@@ -7,6 +7,7 @@ import (
 	"eth-backend/internal/db"
 	"eth-backend/internal/eth"
 	"eth-backend/internal/handler"
+	"eth-backend/internal/health"
 	"eth-backend/internal/listener"
 	"eth-backend/internal/logger"
 	"eth-backend/internal/repository"
@@ -66,7 +67,9 @@ func Run() error {
 
 	h := handler.NewHandler(service)
 	transferHandler := handler.NewTransferHandler(transferRepo, redisClient)
-	srv := server.NewServer(h, transferHandler)
+	checker := health.NewChecker(gdb, redisClient, service)
+	healthHandler := health.NewHealthHandler(checker)
+	srv := server.NewServer(h, transferHandler, healthHandler)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
