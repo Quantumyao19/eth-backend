@@ -2,9 +2,6 @@ package health
 
 import (
 	"context"
-	"sync"
-
-	"golang.org/x/sync/errgroup"
 )
 
 type ReadinessResult struct {
@@ -12,41 +9,30 @@ type ReadinessResult struct {
 	Errors map[string]error
 }
 
-func (c *Checker) CheckReadiness(ctx context.Context) ReadinessResult {
-	type checkResult struct {
-		name string
-		err  error
-	}
-	g, ctx := errgroup.WithContext(ctx)
+type Engine struct {
+	deps []Dependency
+}
 
-	var mu sync.Mutex
+func NewEngine(deps []Dependency) *Engine {
+	return &Engine{deps: deps}
+}
+
+func (e *Engine) CheckReadiness(ctx context.Context) ReadinessResult {
 	errorsMap := make(map[string]error)
 
-	g.Go(func() error {
-		if err := c.checkDB(ctx); err != nil {
-			mu.Lock()
-			errorsMap["db"] = err
-			mu.Unlock()
-		}
-		return nil
-	})
-
-	g.Go(func() error {
-		if err := c.checkRedis(ctx); err != nil {
-			mu.Lock()
-			errorsMap["redis"] = err
-			mu.Unlock()
-		}
-		return nil
-	})
-	_ = g.Wait()
-
 	status := StatusHealthy
-	if len(errorsMap) > 0 {
-		status = StatusDegraded
-	}
-	if _, ok := errorsMap["db"]; ok {
-		status = StatusUnhealthy
+	for _, dep := range e.deps {
+		if err := dep.Check(ctx); err != nil {
+			errorsMap[dep.Name()] = err
+
+			if dep.Critical() {
+				status = StatusUnhealthy
+			} else {
+				if status != StatusUnhealthy {
+					status = StatusDegraded
+				}
+			}
+		}
 	}
 
 	return ReadinessResult{
