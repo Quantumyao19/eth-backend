@@ -8,6 +8,7 @@ import (
 	"eth-backend/internal/eth"
 	"eth-backend/internal/handler"
 	"eth-backend/internal/health"
+	"eth-backend/internal/health/deps"
 	"eth-backend/internal/listener"
 	"eth-backend/internal/logger"
 	"eth-backend/internal/repository"
@@ -67,7 +68,13 @@ func Run() error {
 
 	h := handler.NewHandler(service)
 	transferHandler := handler.NewTransferHandler(transferRepo, redisClient)
-	checker := health.NewChecker(gdb, redisClient)
+
+	engine := health.NewEngine([]health.Dependency{
+		deps.NewPostgresDependency(gdb),
+		deps.NewRedisDependency(redisClient),
+	})
+
+	checker := health.NewChecker(engine)
 	healthHandler := health.NewHealthHandler(checker)
 	srv := server.NewServer(h, transferHandler, healthHandler)
 
