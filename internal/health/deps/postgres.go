@@ -33,6 +33,10 @@ func (p *PostgresDependency) Check(ctx context.Context) error {
 	return err
 }
 
+func (p *PostgresDependency) Weight() int {
+	return 60
+}
+
 func (p *PostgresDependency) Critical() bool {
 	return true
 }
