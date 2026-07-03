@@ -26,6 +26,10 @@ func (r *RedisDependency) Check(ctx context.Context) error {
 	return r.redis.Ping(ctx).Err()
 }
 
+func (r *RedisDependency) Weight() int {
+	return 20
+}
+
 func (r *RedisDependency) Critical() bool {
-	return true
+	return false
 }

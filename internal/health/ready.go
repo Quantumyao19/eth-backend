@@ -16,7 +16,8 @@ func (c *Checker) ReadyHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status": string(result.Status),
+		"score":  result.Score,
 	})
 }

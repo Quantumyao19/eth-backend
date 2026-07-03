@@ -6,6 +6,7 @@ import (
 
 type ReadinessResult struct {
 	Status Status
+	Score  int
 	Errors map[string]error
 }
 
@@ -18,26 +19,41 @@ func NewEngine(deps []Dependency) *Engine {
 }
 
 func (e *Engine) CheckReadiness(ctx context.Context) ReadinessResult {
+	score := 100
 	errorsMap := make(map[string]error)
 
-	status := StatusHealthy
 	for _, dep := range e.deps {
 		if err := dep.Check(ctx); err != nil {
 			errorsMap[dep.Name()] = err
 
 			if dep.Critical() {
-				status = StatusUnhealthy
+				score = 0
 			} else {
-				if status != StatusUnhealthy {
-					status = StatusDegraded
-				}
+				score -= dep.Weight()
 			}
 		}
 	}
 
+	if score < 0 {
+		score = 0
+	}
+
+	status := e.calculateStatus(score)
 	return ReadinessResult{
 		Status: status,
+		Score:  score,
 		Errors: errorsMap,
 	}
 
+}
+
+func (e *Engine) calculateStatus(score int) Status {
+	switch {
+	case score >= 90:
+		return StatusHealthy
+	case score >= 50:
+		return StatusDegraded
+	default:
+		return StatusUnhealthy
+	}
 }
