@@ -4,8 +4,11 @@ import (
 	"context"
 	"eth-backend/internal/handler"
 	"eth-backend/internal/health"
+	"eth-backend/internal/metrics"
 	"eth-backend/internal/middleware"
 	"net/http"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Server struct {
@@ -13,13 +16,15 @@ type Server struct {
 	transferHandler *handler.TransferHandler
 	healthHandler   *health.HealthHandler
 	httpServer      *http.Server
+	metrics         *metrics.Metrics
 }
 
-func NewServer(h *handler.Handler, transferHandler *handler.TransferHandler, healthHandler *health.HealthHandler) *Server {
+func NewServer(h *handler.Handler, transferHandler *handler.TransferHandler, healthHandler *health.HealthHandler, metrics *metrics.Metrics) *Server {
 	return &Server{
 		handler:         h,
 		transferHandler: transferHandler,
 		healthHandler:   healthHandler,
+		metrics:         metrics,
 	}
 }
 
@@ -35,6 +40,7 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/health/live", s.healthHandler.Live)
 	mux.HandleFunc("/health/ready", s.healthHandler.Ready)
 	mux.HandleFunc("/health/startup", s.healthHandler.Startup)
+	mux.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
 
 	var h http.Handler = mux
 	h = middleware.Logging(h)
