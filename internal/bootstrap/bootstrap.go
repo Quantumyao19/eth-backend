@@ -11,6 +11,7 @@ import (
 	"eth-backend/internal/health/deps"
 	"eth-backend/internal/listener"
 	"eth-backend/internal/logger"
+	"eth-backend/internal/metrics"
 	"eth-backend/internal/repository"
 	"eth-backend/internal/server"
 	"net/http"
@@ -76,7 +77,8 @@ func Run() error {
 
 	checker := health.NewChecker(engine)
 	healthHandler := health.NewHealthHandler(checker)
-	srv := server.NewServer(h, transferHandler, healthHandler)
+	m := metrics.NewMetrics()
+	srv := server.NewServer(h, transferHandler, healthHandler, m)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

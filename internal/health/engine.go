@@ -2,12 +2,21 @@ package health
 
 import (
 	"context"
+	"time"
 )
+
+type DependencyResult struct {
+	Name     string
+	Status   Status
+	Duration time.Duration
+	Error    error
+}
 
 type ReadinessResult struct {
 	Status Status
 	Score  int
-	Errors map[string]error
+
+	Dependencies []DependencyResult
 }
 
 type Engine struct {
@@ -20,11 +29,19 @@ func NewEngine(deps []Dependency) *Engine {
 
 func (e *Engine) CheckReadiness(ctx context.Context) ReadinessResult {
 	score := 100
-	errorsMap := make(map[string]error)
+	dependencies := make([]DependencyResult, 0)
 
 	for _, dep := range e.deps {
-		if err := dep.Check(ctx); err != nil {
-			errorsMap[dep.Name()] = err
+		start := time.Now()
+		err := dep.Check(ctx)
+		dependency := DependencyResult{
+			Name:     dep.Name(),
+			Status:   StatusHealthy,
+			Duration: time.Since(start),
+			Error:    err,
+		}
+		if err != nil {
+			dependency.Status = StatusUnhealthy
 
 			if dep.Critical() {
 				score = 0
@@ -32,6 +49,7 @@ func (e *Engine) CheckReadiness(ctx context.Context) ReadinessResult {
 				score -= dep.Weight()
 			}
 		}
+		dependencies = append(dependencies, dependency)
 	}
 
 	if score < 0 {
@@ -40,9 +58,9 @@ func (e *Engine) CheckReadiness(ctx context.Context) ReadinessResult {
 
 	status := e.calculateStatus(score)
 	return ReadinessResult{
-		Status: status,
-		Score:  score,
-		Errors: errorsMap,
+		Status:       status,
+		Score:        score,
+		Dependencies: dependencies,
 	}
 
 }
