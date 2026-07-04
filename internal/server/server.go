@@ -31,19 +31,20 @@ func NewServer(h *handler.Handler, transferHandler *handler.TransferHandler, hea
 func (s *Server) Start(port string) error {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/balance", s.handler.Balance)
-	mux.HandleFunc("/block", s.handler.BlockNumber)
-	mux.HandleFunc("/tx", s.handler.Transaction)
-	mux.HandleFunc("/receipt", s.handler.Receipt)
-	mux.HandleFunc("/tx/detail", s.handler.TxDetail)
-	mux.HandleFunc("/transfers", s.transferHandler.ListTransfer)
-	mux.HandleFunc("/health/live", s.healthHandler.Live)
-	mux.HandleFunc("/health/ready", s.healthHandler.Ready)
-	mux.HandleFunc("/health/startup", s.healthHandler.Startup)
-	mux.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
+	mux.HandleFunc("/balance", withRoute("balance", s.handler.Balance))
+	mux.HandleFunc("/block", withRoute("block", s.handler.BlockNumber))
+	mux.HandleFunc("/tx", withRoute("tx", s.handler.Transaction))
+	mux.HandleFunc("/receipt", withRoute("receipt", s.handler.Receipt))
+	mux.HandleFunc("/tx/detail", withRoute("tx_detail", s.handler.TxDetail))
+	mux.HandleFunc("/transfers", withRoute("transfers", s.transferHandler.ListTransfer))
+	mux.HandleFunc("/health/live", withRoute("health_live", s.healthHandler.Live))
+	mux.HandleFunc("/health/ready", withRoute("health_ready", s.healthHandler.Ready))
+	mux.HandleFunc("/health/startup", withRoute("health_startup", s.healthHandler.Startup))
+	mux.HandleFunc("/metrics", withRoute("metrics", promhttp.Handler().ServeHTTP))
 
 	var h http.Handler = mux
 	h = middleware.Logging(h)
+	h = middleware.Metrics(s.metrics)(h)
 	h = middleware.Recover(h)
 	h = middleware.RequestID(h)
 
