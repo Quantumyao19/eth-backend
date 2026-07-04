@@ -2,18 +2,32 @@ package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 type Metrics struct {
-	PingCounter prometheus.Counter
+	HTTPRequestsTotal   *prometheus.CounterVec
+	HTTPRequestDuration *prometheus.HistogramVec
 }
 
 func NewMetrics() *Metrics {
-	return &Metrics{
-		PingCounter: promauto.NewCounter(prometheus.CounterOpts{
-			Name: "ping_count_total",
-			Help: "Total Number of ping requests",
-		}),
+	m := &Metrics{
+		HTTPRequestsTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "http_requests_total",
+				Help: "Total number of HTTP requests",
+			},
+			[]string{"method", "path", "status"},
+		),
+		HTTPRequestDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "http_request_duration_seconds",
+				Help:    "HTTP request latency distributions",
+				Buckets: prometheus.DefBuckets,
+			},
+			[]string{"method", "route", "status"},
+		),
 	}
+	prometheus.MustRegister(m.HTTPRequestsTotal)
+	prometheus.MustRegister(m.HTTPRequestDuration)
+	return m
 }
