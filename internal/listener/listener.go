@@ -26,7 +26,7 @@ type Listener struct {
 }
 
 const (
-	defaultInterval = 5 * time.Second
+	defaultInterval = 5 * time.Minute
 )
 
 func NewListener(client *ethclient.Client, repo *repository.TransferRepository, redis *redis.Client) *Listener {

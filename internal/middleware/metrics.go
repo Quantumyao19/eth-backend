@@ -24,7 +24,10 @@ func Metrics(m *metrics.Metrics) func(next http.Handler) http.Handler {
 			path := GetRoute(r)
 
 			m.HTTPRequestsTotal.WithLabelValues(r.Method, path, status).Inc()
-			m.HTTPRequestDuration.WithLabelValues(r.Method, path, status).Observe(duration)
+			m.HTTPRequestsDuration.WithLabelValues(r.Method, path, status).Observe(duration)
+			if rw.statusCode >= 500 {
+				m.HTTPRequestsErrors.WithLabelValues(r.Method, path, status)
+			}
 		})
 	}
 }

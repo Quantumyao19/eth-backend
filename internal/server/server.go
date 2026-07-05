@@ -43,6 +43,7 @@ func (s *Server) Start(port string) error {
 	mux.HandleFunc("/metrics", withRoute("metrics", promhttp.Handler().ServeHTTP))
 
 	var h http.Handler = mux
+	h = routeContext(h)
 	h = middleware.Logging(h)
 	h = middleware.Metrics(s.metrics)(h)
 	h = middleware.Recover(h)
