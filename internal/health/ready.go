@@ -1,23 +1,14 @@
 package health
 
-import (
-	"encoding/json"
-	"net/http"
-)
+import "github.com/gin-gonic/gin"
 
-func (c *Checker) ReadyHandler(w http.ResponseWriter, r *http.Request) {
-	result := c.CheckReadiness(r.Context())
-
-	w.Header().Set("Content-Type", "application/json")
+func (c *Checker) ReadyHandler(ctx *gin.Context) {
+	result := c.CheckReadiness(ctx.Request.Context())
 
 	if result.Status == StatusUnhealthy {
-		w.WriteHeader(http.StatusServiceUnavailable)
-	} else {
-		w.WriteHeader(http.StatusOK)
+		ctx.JSON(503, gin.H{"status": string(result.Status), "score": result.Score})
+		return
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"status": string(result.Status),
-		"score":  result.Score,
-	})
+	ctx.JSON(200, gin.H{"status": string(result.Status), "score": result.Score})
 }

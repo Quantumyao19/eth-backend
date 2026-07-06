@@ -1,14 +1,7 @@
 package health
 
-import (
-	"encoding/json"
-	"net/http"
-)
+import "github.com/gin-gonic/gin"
 
-func (c *Checker) StartupHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"status": "started",
-	})
+func (c *Checker) StartupHandler(ctx *gin.Context) {
+	ctx.JSON(200, gin.H{"status": "started"})
 }

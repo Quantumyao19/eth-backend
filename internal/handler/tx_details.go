@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
 	"eth-backend/internal/logger"
@@ -82,46 +83,46 @@ const erc20ABI = `[
   }
 ]`
 
-func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
-	requestID, _ := r.Context().Value(middleware.RequestIDKey).(string)
+func (h *Handler) TxDetail(c *gin.Context) {
+	requestID, _ := c.Request.Context().Value(middleware.RequestIDKey).(string)
 
-	hash := r.URL.Query().Get("hash")
+	hash := c.Query("hash")
 	if hash == "" {
-		writeError(w, "missing hash", http.StatusBadRequest)
+		writeError(c, "missing hash", http.StatusBadRequest)
 		return
 	}
 
 	if !common.IsHexHash(hash) {
-		writeError(w, "invalid hash format", http.StatusBadRequest)
+		writeError(c, "invalid hash format", http.StatusBadRequest)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), defaultTimeout)
 	defer cancel()
 
 	// obtain transaction
 	tx, isPending, err := h.service.GetTransaction(ctx, common.HexToHash(hash))
 	if err != nil {
-		handleError(w, err)
+		handleError(c, err)
 		return
 	}
 
 	if tx == nil {
-		writeError(w, "transaction not found", http.StatusNotFound)
+		writeError(c, "transaction not found", http.StatusNotFound)
 		return
 	}
 
 	// obtain receipt
 	receipt, err := h.service.GetTransactionReceipt(ctx, common.HexToHash(hash))
 	if err != nil {
-		handleError(w, err)
+		handleError(c, err)
 		return
 	}
 
 	parsedABI, err := abi.JSON(strings.NewReader(erc20ABI))
 	if err != nil {
 		logger.Log.Error("parsed abi", zap.Error(err), zap.String("request_id", requestID))
-		handleError(w, err)
+		handleError(c, err)
 		return
 	}
 
@@ -258,6 +259,6 @@ func (h *Handler) TxDetail(w http.ResponseWriter, r *http.Request) {
 		Approvals:   approvals,
 	}
 
-	writeJSON(w, resp)
+	writeJSON(c, resp)
 
 }

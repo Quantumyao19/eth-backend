@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
@@ -23,37 +24,37 @@ type TransactionResponse struct {
 	GasPrice string `json:"gas_price"`
 }
 
-func (h *Handler) Transaction(w http.ResponseWriter, r *http.Request) {
-	requestID, _ := r.Context().Value(middleware.RequestIDKey).(string)
+func (h *Handler) Transaction(c *gin.Context) {
+	requestID, _ := c.Request.Context().Value(middleware.RequestIDKey).(string)
 
-	hash := r.URL.Query().Get("hash")
+	hash := c.Query("hash")
 	if hash == "" {
-		writeError(w, "missing hash", http.StatusBadRequest)
+		writeError(c, "missing hash", http.StatusBadRequest)
 		return
 	}
 
 	if !common.IsHexHash(hash) {
-		writeError(w, "invalid hash format", http.StatusBadRequest)
+		writeError(c, "invalid hash format", http.StatusBadRequest)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), defaultTimeout)
 	defer cancel()
 
 	tx, isPending, err := h.service.GetTransaction(ctx, common.HexToHash(hash))
 	if err != nil {
 		logger.Log.Error("gettransaction error", zap.Error(err), zap.String("request_id", requestID))
-		handleError(w, err)
+		handleError(c, err)
 		return
 	}
 
 	if tx == nil {
-		writeError(w, "transaction not found", http.StatusNotFound)
+		writeError(c, "transaction not found", http.StatusNotFound)
 		return
 	}
 
 	resp := buildTransactionResponse(tx, isPending)
-	writeJSON(w, resp)
+	writeJSON(c, resp)
 }
 
 func buildTransactionResponse(tx *types.Transaction, isPending bool) TransactionResponse {
