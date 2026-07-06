@@ -46,6 +46,9 @@ func WithRouteContext() gin.HandlerFunc {
 
 func WithMetrics(m *metrics.Metrics) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		m.HTTPRequestsInProgress.Inc()
+		defer m.HTTPRequestsInProgress.Dec()
+
 		start := time.Now()
 		c.Next()
 		duration := time.Since(start).Seconds()
@@ -58,9 +61,9 @@ func WithMetrics(m *metrics.Metrics) gin.HandlerFunc {
 		}
 
 		m.HTTPRequestsTotal.WithLabelValues(c.Request.Method, route, status).Inc()
-		m.HTTPRequestsDuration.WithLabelValues(c.Request.Method, route, status).Observe(duration)
+		m.HTTPRequestsDuration.WithLabelValues(c.Request.Method, route).Observe(duration)
 		if c.Writer.Status() >= 500 {
-			m.HTTPRequestsErrors.WithLabelValues(c.Request.Method, route, status)
+			m.HTTPRequestsErrors.WithLabelValues(c.Request.Method, route, status).Inc()
 		}
 	}
 }
