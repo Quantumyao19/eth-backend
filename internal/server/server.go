@@ -7,6 +7,7 @@ import (
 	"eth-backend/internal/metrics"
 	"eth-backend/internal/middleware"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -65,6 +66,10 @@ func (s *Server) Start(port string) error {
 	s.httpServer = &http.Server{
 		Addr:    ":" + port,
 		Handler: s.engine,
+
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	return s.httpServer.ListenAndServe()

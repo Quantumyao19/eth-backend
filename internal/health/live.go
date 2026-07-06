@@ -1,7 +1,11 @@
 package health
 
-import "github.com/gin-gonic/gin"
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
 
 func (c *Checker) LiveHandler(ctx *gin.Context) {
-	ctx.JSON(200, gin.H{"status": "alive"})
+	ctx.JSON(http.StatusOK, gin.H{"status": "alive"})
 }
