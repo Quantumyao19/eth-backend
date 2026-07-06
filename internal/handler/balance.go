@@ -7,6 +7,7 @@ import (
 	"eth-backend/internal/middleware"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
@@ -18,26 +19,26 @@ func NewHandler(s *eth.Service) *Handler {
 	return &Handler{service: s}
 }
 
-func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
-	requestID, _ := r.Context().Value(middleware.RequestIDKey).(string)
+func (h *Handler) Balance(c *gin.Context) {
+	requestID, _ := c.Request.Context().Value(middleware.RequestIDKey).(string)
 
-	addr := r.URL.Query().Get("address")
+	addr := c.Query("address")
 	if addr == "" {
-		writeError(w, "missing address", http.StatusBadRequest)
+		writeError(c, "missing address", http.StatusBadRequest)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), defaultTimeout)
 	defer cancel()
 
 	wei, eth, err := h.service.GetBalance(ctx, addr)
 	if err != nil {
 		logger.Log.Error("GetBalance error", zap.Error(err), zap.String("request_id", requestID))
-		handleError(w, err)
+		handleError(c, err)
 		return
 	}
 
-	writeJSON(w, map[string]string{
+	writeJSON(c, map[string]string{
 		"address":     addr,
 		"balance_wei": wei,
 		"balance_eth": eth,

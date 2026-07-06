@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -39,26 +40,26 @@ func NewTransferHandler(repo *repository.TransferRepository, redisClient *redis.
 	}
 }
 
-func (handler *TransferHandler) ListTransfer(w http.ResponseWriter, r *http.Request) {
-	requestID, _ := r.Context().Value(middleware.RequestIDKey).(string)
-	ctx := r.Context()
-	address := r.URL.Query().Get("address")
+func (handler *TransferHandler) ListTransfer(c *gin.Context) {
+	requestID, _ := c.Request.Context().Value(middleware.RequestIDKey).(string)
+	ctx := c.Request.Context()
+	address := c.Query("address")
 	if address == "" {
-		writeError(w, "address required", http.StatusBadRequest)
+		writeError(c, "address required", http.StatusBadRequest)
 		return
 	}
 
 	if !isValidEthereumAddress(address) {
-		writeError(w, "invalid ethereum address format", http.StatusBadRequest)
+		writeError(c, "invalid ethereum address format", http.StatusBadRequest)
 		return
 	}
 
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {
 		page = 1
 	}
 
-	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	pageSize, _ := strconv.Atoi(c.Query("page_size"))
 	if pageSize <= 0 {
 		pageSize = defaultPageSize
 	}
@@ -69,7 +70,7 @@ func (handler *TransferHandler) ListTransfer(w http.ResponseWriter, r *http.Requ
 	cached, err := handler.redis.Get(ctx, cacheKey).Result()
 	if err == nil {
 		logger.Log.Debug("transfer cache hit", zap.String("cache_key", cacheKey), zap.String("request_id", requestID))
-		writeCachedJSON(w, cached)
+		writeCachedJSON(c, cached)
 		return
 	} else if err != redis.Nil {
 		logger.Log.Warn("redis cache read failed", zap.Error(err), zap.String("cache_key", cacheKey), zap.String("request_id", requestID))
@@ -86,10 +87,10 @@ func (handler *TransferHandler) ListTransfer(w http.ResponseWriter, r *http.Requ
 		defer handler.releaseTransferLock(ctx, lockKey, lockValue, requestID)
 		resp, err := handler.queryAndCacheTransfers(ctx, cacheKey, address, page, pageSize, requestID)
 		if err != nil {
-			handleError(w, err)
+			handleError(c, err)
 			return
 		}
-		writeJSON(w, resp)
+		writeJSON(c, resp)
 		return
 	}
 
@@ -100,7 +101,7 @@ func (handler *TransferHandler) ListTransfer(w http.ResponseWriter, r *http.Requ
 			select {
 			case <-ctx.Done():
 				timer.Stop()
-				handleError(w, ctx.Err())
+				handleError(c, ctx.Err())
 				return
 			case <-timer.C:
 			}
@@ -108,7 +109,7 @@ func (handler *TransferHandler) ListTransfer(w http.ResponseWriter, r *http.Requ
 			cached, err := handler.redis.Get(ctx, cacheKey).Result()
 			if err == nil {
 				logger.Log.Debug("transfer cache hit after wait", zap.String("cache_key", cacheKey), zap.String("request_id", requestID))
-				writeCachedJSON(w, cached)
+				writeCachedJSON(c, cached)
 				return
 			}
 			if err != redis.Nil {
@@ -125,10 +126,10 @@ func (handler *TransferHandler) ListTransfer(w http.ResponseWriter, r *http.Requ
 
 	resp, err := handler.queryAndCacheTransfers(ctx, cacheKey, address, page, pageSize, requestID)
 	if err != nil {
-		handleError(w, err)
+		handleError(c, err)
 		return
 	}
-	writeJSON(w, resp)
+	writeJSON(c, resp)
 }
 
 func jitterCacheWaitInterval(interval time.Duration) time.Duration {
@@ -145,9 +146,8 @@ func jitterCacheWaitInterval(interval time.Duration) time.Duration {
 	return waitInterval
 }
 
-func writeCachedJSON(w http.ResponseWriter, cached string) {
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(cached))
+func writeCachedJSON(c *gin.Context, cached string) {
+	c.Data(http.StatusOK, "application/json", []byte(cached))
 }
 
 func (handler *TransferHandler) queryAndCacheTransfers(ctx context.Context, cacheKey string, address string, page int, pageSize int, requestID string) (map[string]interface{}, error) {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
@@ -16,32 +17,32 @@ type ReceiptResponse struct {
 	GasUsed uint64 `json:"gas_used"`
 }
 
-func (h *Handler) Receipt(w http.ResponseWriter, r *http.Request) {
-	requestID, _ := r.Context().Value(middleware.RequestIDKey).(string)
+func (h *Handler) Receipt(c *gin.Context) {
+	requestID, _ := c.Request.Context().Value(middleware.RequestIDKey).(string)
 
-	hash := r.URL.Query().Get("hash")
+	hash := c.Query("hash")
 	if hash == "" {
-		writeError(w, "missing hash", http.StatusBadRequest)
+		writeError(c, "missing hash", http.StatusBadRequest)
 		return
 	}
 
 	if !common.IsHexHash(hash) {
-		writeError(w, "invalid hash format", http.StatusBadRequest)
+		writeError(c, "invalid hash format", http.StatusBadRequest)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), defaultTimeout)
 	defer cancel()
 
 	receipt, err := h.service.GetTransactionReceipt(ctx, common.HexToHash(hash))
 	if err != nil {
 		logger.Log.Error("get receipt error", zap.Error(err), zap.String("request_id", requestID))
-		handleError(w, err)
+		handleError(c, err)
 		return
 	}
 
 	if receipt == nil {
-		writeError(w, "receipt not found", http.StatusNotFound)
+		writeError(c, "receipt not found", http.StatusNotFound)
 		return
 	}
 
@@ -51,5 +52,5 @@ func (h *Handler) Receipt(w http.ResponseWriter, r *http.Request) {
 		GasUsed: receipt.GasUsed,
 	}
 
-	writeJSON(w, resp)
+	writeJSON(c, resp)
 }

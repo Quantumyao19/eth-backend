@@ -1,6 +1,6 @@
 package health
 
-import "net/http"
+import "github.com/gin-gonic/gin"
 
 type HealthHandler struct {
 	Checker *Checker
@@ -12,14 +12,14 @@ func NewHealthHandler(checker *Checker) *HealthHandler {
 	}
 }
 
-func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
-	h.Checker.ReadyHandler(w, r)
+func (h *HealthHandler) Ready(c *gin.Context) {
+	h.Checker.ReadyHandler(c)
 }
 
-func (h *HealthHandler) Live(w http.ResponseWriter, r *http.Request) {
-	h.Checker.LiveHandler(w, r)
+func (h *HealthHandler) Live(c *gin.Context) {
+	h.Checker.LiveHandler(c)
 }
 
-func (h *HealthHandler) Startup(w http.ResponseWriter, r *http.Request) {
-	h.Checker.StartupHandler(w, r)
+func (h *HealthHandler) Startup(c *gin.Context) {
+	h.Checker.StartupHandler(c)
 }
