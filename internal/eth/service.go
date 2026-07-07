@@ -44,7 +44,7 @@ func NewService(client *Client, cfg config.EthConfig) (*Service, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	chainID, err := client.rpc.ChainID(ctx)
+	chainID, err := client.ChainID(ctx)
 	if err != nil {
 		logger.Log.Error("chainID error", zap.Error(err))
 		return nil, err
@@ -78,11 +78,11 @@ func NewService(client *Client, cfg config.EthConfig) (*Service, error) {
 }
 
 func (s *Service) GetBlockNumber(ctx context.Context) (uint64, error) {
-	return s.client.rpc.BlockNumber(ctx)
+	return s.client.GetBlockNumber(ctx)
 }
 
 func (s *Service) GetBalance(ctx context.Context, addr string) (string, string, error) {
-	balance, err := s.client.rpc.BalanceAt(ctx, common.HexToAddress(addr), nil)
+	balance, err := s.client.GetBalance(ctx, addr)
 	if err != nil {
 		return "", "", err
 	}
@@ -101,7 +101,7 @@ func (s *Service) GetTransaction(ctx context.Context, hash common.Hash) (*types.
 }
 
 func (s *Service) GetTransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	return s.client.rpc.TransactionReceipt(ctx, hash)
+	return s.client.GetTransactionReceipt(ctx, hash)
 }
 
 func (s *Service) GetTransactionSender(ctx context.Context, tx *types.Transaction) (common.Address, error) {
@@ -111,7 +111,7 @@ func (s *Service) GetTransactionSender(ctx context.Context, tx *types.Transactio
 
 func (s *Service) GetTokenMeta(ctx context.Context, token common.Address) (string, uint8, error) {
 	data, _ := s.metaABI.Pack("decimals")
-	res, err := s.client.rpc.CallContract(ctx, ethereum.CallMsg{
+	res, err := s.client.CallContract(ctx, ethereum.CallMsg{
 		To:   &token,
 		Data: data,
 	}, nil)
@@ -126,7 +126,7 @@ func (s *Service) GetTokenMeta(ctx context.Context, token common.Address) (strin
 	}
 
 	data, _ = s.metaABI.Pack("symbol")
-	res, err = s.client.rpc.CallContract(ctx, ethereum.CallMsg{
+	res, err = s.client.CallContract(ctx, ethereum.CallMsg{
 		To:   &token,
 		Data: data,
 	}, nil)

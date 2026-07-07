@@ -9,6 +9,9 @@ type Metrics struct {
 	HTTPRequestsDuration   *prometheus.HistogramVec
 	HTTPRequestsErrors     *prometheus.CounterVec
 	HTTPRequestsInProgress prometheus.Gauge
+
+	RPCRequestsTotal   *prometheus.CounterVec
+	RPCRequestDuration *prometheus.HistogramVec
 }
 
 func NewMetrics() *Metrics {
