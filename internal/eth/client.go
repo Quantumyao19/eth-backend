@@ -15,9 +15,9 @@ import (
 const (
 	rpcMethodBlockNumber           = "eth_blockNumber"
 	rpcMethodGetBalance            = "eth_getBalance"
-	rpcMethodTransactionByHash     = "eth_transactionByHash"
+	rpcMethodTransactionByHash     = "eth_getTransactionByHash"
 	rpcMethodGetTransactionReceipt = "eth_getTransactionReceipt"
-	rpcMethodCallContract          = "eth_callContract"
+	rpcMethodCallContract          = "eth_call"
 )
 
 type Client struct {
@@ -45,32 +45,37 @@ func (c *Client) ChainID(ctx context.Context) (*big.Int, error) {
 	return c.rpc.ChainID(ctx)
 }
 
-func (c *Client) GetBlockNumber(ctx context.Context) (uint64, error) {
-	defer c.observeRPC(rpcMethodBlockNumber, time.Now())
-	return c.rpc.BlockNumber(ctx)
+func (c *Client) GetBlockNumber(ctx context.Context) (block uint64, err error) {
+	defer c.observeRPC(rpcMethodBlockNumber, time.Now(), &err)
+	block, err = c.rpc.BlockNumber(ctx)
+	return
 }
 
-func (c *Client) GetBalance(ctx context.Context, addr string) (*big.Int, error) {
-	defer c.observeRPC(rpcMethodGetBalance, time.Now())
-	return c.rpc.BalanceAt(ctx, common.HexToAddress(addr), nil)
+func (c *Client) GetBalance(ctx context.Context, addr string) (balance *big.Int, err error) {
+	defer c.observeRPC(rpcMethodGetBalance, time.Now(), &err)
+	balance, err = c.rpc.BalanceAt(ctx, common.HexToAddress(addr), nil)
+	return
 }
 
-func (c *Client) TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error) {
-	defer c.observeRPC(rpcMethodTransactionByHash, time.Now())
-	return c.rpc.TransactionByHash(ctx, hash)
+func (c *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error) {
+	defer c.observeRPC(rpcMethodTransactionByHash, time.Now(), &err)
+	tx, isPending, err = c.rpc.TransactionByHash(ctx, hash)
+	return
 }
 
-func (c *Client) GetTransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	defer c.observeRPC(rpcMethodGetTransactionReceipt, time.Now())
-	return c.rpc.TransactionReceipt(ctx, hash)
+func (c *Client) GetTransactionReceipt(ctx context.Context, hash common.Hash) (receipt *types.Receipt, err error) {
+	defer c.observeRPC(rpcMethodGetTransactionReceipt, time.Now(), &err)
+	receipt, err = c.rpc.TransactionReceipt(ctx, hash)
+	return
 }
 
-func (c *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
-	defer c.observeRPC(rpcMethodCallContract, time.Now())
-	return c.rpc.CallContract(ctx, msg, blockNumber)
+func (c *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) (result []byte, err error) {
+	defer c.observeRPC(rpcMethodCallContract, time.Now(), &err)
+	result, err = c.rpc.CallContract(ctx, msg, blockNumber)
+	return
 }
 
-func (c *Client) observeRPC(method string, start time.Time) {
+func (c *Client) observeRPC(method string, start time.Time, err *error) {
 	if c.metrics == nil {
 		return
 	}
@@ -79,4 +84,8 @@ func (c *Client) observeRPC(method string, start time.Time) {
 
 	c.metrics.RPCRequestsTotal.WithLabelValues(method).Inc()
 	c.metrics.RPCRequestDuration.WithLabelValues(method).Observe(duration)
+
+	if err != nil && *err != nil {
+		c.metrics.RPCRequestsErrors.WithLabelValues(method).Inc()
+	}
 }
