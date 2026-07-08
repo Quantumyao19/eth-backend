@@ -38,17 +38,6 @@ func Run() error {
 
 	cfg := config.Load()
 
-	client, err := eth.NewClient(cfg.Eth.RPCURL)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-
-	service, err := eth.NewService(client, cfg.Eth)
-	if err != nil {
-		return err
-	}
-
 	dbPool, err := db.NewPostgres(cfg.DB.Postgres.URL)
 	if err != nil {
 		return err
@@ -67,6 +56,18 @@ func Run() error {
 	redisClient := db.NewRedisClient(cfg.DB.Redis.Addr, cfg.DB.Redis.Password, cfg.DB.Redis.DB)
 	defer redisClient.Close()
 
+	m := metrics.NewMetrics()
+	client, err := eth.NewClient(cfg.Eth.RPCURL, m)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	service, err := eth.NewService(client, cfg.Eth)
+	if err != nil {
+		return err
+	}
+
 	h := handler.NewHandler(service)
 	transferHandler := handler.NewTransferHandler(transferRepo, redisClient)
 
@@ -77,7 +78,7 @@ func Run() error {
 
 	checker := health.NewChecker(engine)
 	healthHandler := health.NewHealthHandler(checker)
-	m := metrics.NewMetrics()
+
 	srv := server.NewServer(h, transferHandler, healthHandler, m)
 
 	ctx, cancel := context.WithCancel(context.Background())
