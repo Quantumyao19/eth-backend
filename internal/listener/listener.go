@@ -3,6 +3,7 @@ package listener
 import (
 	"context"
 	"eth-backend/internal/logger"
+	"eth-backend/internal/metrics"
 	"eth-backend/internal/model"
 	"eth-backend/internal/repository"
 	"fmt"
@@ -19,26 +20,50 @@ import (
 )
 
 type Listener struct {
-	client   *ethclient.Client
-	interval time.Duration
-	repo     *repository.TransferRepository
-	redis    *redis.Client
+	client       *ethclient.Client
+	interval     time.Duration
+	transferRepo *repository.TransferRepository
+	stateRepo    *repository.ListenerStateRepository
+	redis        *redis.Client
+	metrics      *metrics.Metrics
+
+	lastProcessedBlock uint64
 }
 
 const (
-	defaultInterval = 5 * time.Minute
+	defaultInterval             = 1 * time.Minute
+	transferListenerName        = "transfer_listener"
+	maxBlockRange        uint64 = 10
+	confirmations        uint64 = 12
 )
 
-func NewListener(client *ethclient.Client, repo *repository.TransferRepository, redis *redis.Client) *Listener {
+func NewListener(client *ethclient.Client, transferRepo *repository.TransferRepository, stateRepo *repository.ListenerStateRepository, redis *redis.Client, metrics *metrics.Metrics) *Listener {
 	return &Listener{
-		client:   client,
-		interval: defaultInterval,
-		repo:     repo,
-		redis:    redis,
+		client:       client,
+		interval:     defaultInterval,
+		transferRepo: transferRepo,
+		stateRepo:    stateRepo,
+		redis:        redis,
+		metrics:      metrics,
 	}
 }
 
 func (l *Listener) Start(ctx context.Context) {
+	if err := l.initState(ctx); err != nil {
+		logger.Log.Error("failed to init listener state", zap.Error(err))
+		return
+	}
+
+	block, err := l.stateRepo.GetLastProcessedBlock(ctx, transferListenerName)
+	if err != nil {
+		logger.Log.Error("failed to get checkpoint", zap.Error(err))
+		return
+	}
+
+	l.lastProcessedBlock = uint64(block)
+
+	l.metrics.ListenerLastProcessedBlock.Set(float64(block))
+
 	go l.loop(ctx)
 }
 
@@ -46,32 +71,46 @@ func (l *Listener) loop(ctx context.Context) {
 	ticker := time.NewTicker(l.interval)
 	defer ticker.Stop()
 
-	var lastBlock uint64
-
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			func() {
+				start := time.Now()
+				defer func() {
+					l.metrics.ListenerProcessingDuration.Observe(time.Since(start).Seconds())
+				}()
+
 				ctxCycle, cancel := context.WithTimeout(ctx, 10*time.Second)
 				defer cancel()
 
 				latestBlock, err := l.client.BlockNumber(ctxCycle)
-
 				if err != nil {
 					logger.Log.Error("get block error", zap.Error(err))
+					l.metrics.ListenerErrorsTotal.WithLabelValues("get_block").Inc()
 					return
 				}
 
-				if lastBlock == 0 {
-					lastBlock = latestBlock - 5
+				if latestBlock <= confirmations {
+					return
+				}
+				latestBlock -= confirmations
+				fromBlock := l.lastProcessedBlock + 1
+
+				if fromBlock > latestBlock {
+					logger.Log.Info("no ew blocks", zap.Uint64("latest", latestBlock))
 					return
 				}
 
-				logs, err := l.fetchLogs(ctxCycle, lastBlock, latestBlock)
+				if latestBlock-fromBlock > maxBlockRange {
+					latestBlock = fromBlock + maxBlockRange
+				}
+
+				logs, err := l.fetchLogs(ctxCycle, fromBlock, latestBlock)
 				if err != nil {
 					logger.Log.Error("fetch logs error", zap.Error(err))
+					l.metrics.ListenerErrorsTotal.WithLabelValues("fetch_logs").Inc()
 					return
 				}
 
@@ -88,18 +127,42 @@ func (l *Listener) loop(ctx context.Context) {
 					}
 				}
 
+				tx, err := l.transferRepo.Begin()
+				if err != nil {
+					return
+				}
+
+				var inserted int64
 				if len(transfers) > 0 {
-					inserted, err := l.repo.InsertMany(ctxCycle, transfers)
+					inserted, err = l.transferRepo.InsertManyTx(ctxCycle, tx, transfers)
 					if err != nil {
-						logger.Log.Error("batch insert error", zap.Error(err))
+						tx.Rollback()
 						return
-					} else {
-						logger.Log.Info("batch insert completed", zap.Int("requested", len(transfers)), zap.Int64("inserted", inserted))
-						l.invalidateTransaferCache(ctxCycle, addressSet)
 					}
 				}
 
-				lastBlock = latestBlock
+				l.stateRepo.UpdateLastProcessedBlockTx(ctxCycle, tx, transferListenerName, int64(latestBlock))
+				if err != nil {
+					tx.Rollback()
+					return
+				}
+
+				if err = tx.Commit(); err != nil {
+					logger.Log.Error("listener commit error", zap.Error(err))
+					return
+				}
+
+				l.lastProcessedBlock = latestBlock
+
+				if len(transfers) > 0 {
+					l.invalidateTransaferCache(ctxCycle, addressSet)
+
+					l.metrics.ListenerEventsProcessedTotal.Add(float64(len(transfers)))
+				}
+				l.metrics.ListenerLastProcessedBlock.Set(float64(latestBlock))
+				l.metrics.ListenerBlocksProcessedTotal.Inc()
+
+				logger.Log.Info("batch insert completed", zap.Int("requested", len(transfers)), zap.Int64("inserted", inserted))
 
 			}()
 
@@ -136,7 +199,7 @@ func (l *Listener) parseTransfer(vLog types.Log) *model.Transfer {
 
 	transfer := &model.Transfer{
 		TxHash:       vLog.TxHash.Hex(),
-		LogIndex:     uint(vLog.TxIndex),
+		LogIndex:     uint(vLog.Index),
 		BlockNumber:  vLog.BlockNumber,
 		TokenAddress: vLog.Address.Hex(),
 		From:         from.Hex(),
@@ -164,4 +227,8 @@ func (l *Listener) invalidateTransaferCache(ctx context.Context, addressSet map[
 
 		}
 	}
+}
+
+func (l *Listener) initState(ctx context.Context) error {
+	return l.stateRepo.EnsureState(ctx, transferListenerName)
 }

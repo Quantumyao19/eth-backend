@@ -20,15 +20,11 @@ func NewTransferRepository(gdb *goqu.Database) *TransferRepository {
 	return &TransferRepository{gdb: gdb}
 }
 
-func (r *TransferRepository) Insert(ctx context.Context, t *model.Transfer) error {
-	if t == nil {
-		return nil
-	}
-	_, err := r.InsertMany(ctx, []*model.Transfer{t})
-	return err
+func (r *TransferRepository) Begin() (*goqu.TxDatabase, error) {
+	return r.gdb.Begin()
 }
 
-func (r *TransferRepository) InsertMany(ctx context.Context, ts []*model.Transfer) (int64, error) {
+func (r *TransferRepository) InsertManyTx(ctx context.Context, tx *goqu.TxDatabase, ts []*model.Transfer) (int64, error) {
 	if len(ts) == 0 {
 		return 0, nil
 	}
@@ -58,7 +54,7 @@ func (r *TransferRepository) InsertMany(ctx context.Context, ts []*model.Transfe
 		return 0, nil
 	}
 
-	res, err := r.gdb.Insert(tblTokenTransfers).Rows(records).OnConflict(goqu.DoNothing()).Executor().ExecContext(ctx)
+	res, err := tx.Insert(tblTokenTransfers).Rows(records).OnConflict(goqu.DoNothing()).Executor().ExecContext(ctx)
 	if err != nil {
 		return 0, err
 	}

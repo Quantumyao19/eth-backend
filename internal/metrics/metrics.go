@@ -2,18 +2,27 @@ package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
 type Metrics struct {
+	// HTTP
 	HTTPRequestsTotal      *prometheus.CounterVec
 	HTTPRequestsDuration   *prometheus.HistogramVec
 	HTTPRequestsErrors     *prometheus.CounterVec
 	HTTPRequestsInProgress prometheus.Gauge
 
+	// RPC
 	RPCRequestsTotal   *prometheus.CounterVec
 	RPCRequestDuration *prometheus.HistogramVec
 	RPCRequestsErrors  *prometheus.CounterVec
+
+	// Listener
+	ListenerBlocksProcessedTotal prometheus.Counter
+	ListenerEventsProcessedTotal prometheus.Counter
+	ListenerProcessingDuration   prometheus.Histogram
+	ListenerLastProcessedBlock   prometheus.Gauge
+	ListenerBlockLag             prometheus.Gauge
+	ListenerErrorsTotal          *prometheus.CounterVec
 }
 
 func NewMetrics() *Metrics {
@@ -58,7 +67,7 @@ func NewMetrics() *Metrics {
 			prometheus.HistogramOpts{
 				Name:    "rpc_request_duration_seconds",
 				Help:    "RPC requests latency distributions",
-				Buckets: []float64{0.01, 0.05, 0.1, 0.3, 0.5, 1, 2, 5},
+				Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30},
 			},
 			[]string{"method"},
 		),
@@ -68,6 +77,45 @@ func NewMetrics() *Metrics {
 				Help: "Total number of failed RPC requests",
 			},
 			[]string{"method"},
+		),
+
+		ListenerBlocksProcessedTotal: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "listener_blocks_processed_total",
+				Help: "Total number of pocessed blocks",
+			},
+		),
+		ListenerEventsProcessedTotal: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "listener_events_processed_total",
+				Help: "Total number of processed events",
+			},
+		),
+		ListenerProcessingDuration: prometheus.NewHistogram(
+			prometheus.HistogramOpts{
+				Name:    "listener_block_processing_duration_seconds",
+				Help:    "Block processing latency distributions",
+				Buckets: []float64{30, 60, 90, 120, 150, 180},
+			},
+		),
+		ListenerLastProcessedBlock: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "listener_last_processed_block",
+				Help: "Last processed Ethereum block number",
+			},
+		),
+		ListenerBlockLag: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "listener_block_lag",
+				Help: "Number of blocks listener is behind the chain head",
+			},
+		),
+		ListenerErrorsTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "listener_errors_total",
+				Help: "Total number of listener errors",
+			},
+			[]string{"stage"},
 		),
 	}
 	prometheus.MustRegister(
@@ -80,7 +128,12 @@ func NewMetrics() *Metrics {
 		m.RPCRequestDuration,
 		m.RPCRequestsErrors,
 
-		collectors.NewGoCollector(),
+		m.ListenerBlocksProcessedTotal,
+		m.ListenerEventsProcessedTotal,
+		m.ListenerProcessingDuration,
+		m.ListenerLastProcessedBlock,
+		m.ListenerBlockLag,
+		m.ListenerErrorsTotal,
 	)
 
 	return m

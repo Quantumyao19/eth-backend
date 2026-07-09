@@ -19,7 +19,8 @@ import (
 )
 
 type TransferHandler struct {
-	repo  *repository.TransferRepository
+	transferRepo *repository.TransferRepository
+
 	redis *redis.Client
 }
 
@@ -33,10 +34,10 @@ const (
 	cacheMaxInterval     = 300 * time.Millisecond
 )
 
-func NewTransferHandler(repo *repository.TransferRepository, redisClient *redis.Client) *TransferHandler {
+func NewTransferHandler(transferRepo *repository.TransferRepository, redisClient *redis.Client) *TransferHandler {
 	return &TransferHandler{
-		repo:  repo,
-		redis: redisClient,
+		transferRepo: transferRepo,
+		redis:        redisClient,
 	}
 }
 
@@ -167,7 +168,7 @@ func (handler *TransferHandler) queryAndCacheTransfers(ctx context.Context, cach
 
 	}
 
-	data, total, err := handler.repo.ListByAddress(ctx, address, page, pageSize)
+	data, total, err := handler.transferRepo.ListByAddress(ctx, address, page, pageSize)
 	if err != nil {
 		logger.Log.Error("transfer repo list failed", zap.Error(err), zap.String("address", address), zap.String("request_id", requestID))
 		return nil, err
