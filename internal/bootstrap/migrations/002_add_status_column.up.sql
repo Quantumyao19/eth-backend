@@ -1,0 +1,1 @@
+ALTER TABLE public.token_transfers ADD COLUMN status TEXT;
