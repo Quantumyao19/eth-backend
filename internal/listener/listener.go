@@ -24,6 +24,7 @@ type Listener struct {
 	interval     time.Duration
 	transferRepo *repository.TransferRepository
 	stateRepo    *repository.ListenerStateRepository
+	cleanupRepo  *repository.CleanupRepository
 	redis        *redis.Client
 	metrics      *metrics.Metrics
 
@@ -31,18 +32,21 @@ type Listener struct {
 }
 
 const (
-	defaultInterval             = 1 * time.Minute
+	listenerInterval            = 1 * time.Minute
+	cleanupInterval             = 10 * time.Minute
 	transferListenerName        = "transfer_listener"
 	maxBlockRange        uint64 = 10
 	confirmations        uint64 = 12
+	retainRecords        int    = 10000
 )
 
-func NewListener(client *ethclient.Client, transferRepo *repository.TransferRepository, stateRepo *repository.ListenerStateRepository, redis *redis.Client, metrics *metrics.Metrics) *Listener {
+func NewListener(client *ethclient.Client, transferRepo *repository.TransferRepository, stateRepo *repository.ListenerStateRepository, cleanupRepo *repository.CleanupRepository, redis *redis.Client, metrics *metrics.Metrics) *Listener {
 	return &Listener{
 		client:       client,
-		interval:     defaultInterval,
+		interval:     listenerInterval,
 		transferRepo: transferRepo,
 		stateRepo:    stateRepo,
+		cleanupRepo:  cleanupRepo,
 		redis:        redis,
 		metrics:      metrics,
 	}
@@ -71,6 +75,9 @@ func (l *Listener) loop(ctx context.Context) {
 	ticker := time.NewTicker(l.interval)
 	defer ticker.Stop()
 
+	cleanupTicker := time.NewTicker(cleanupInterval)
+	defer cleanupTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -79,6 +86,12 @@ func (l *Listener) loop(ctx context.Context) {
 		case <-ticker.C:
 			if err := l.processCycle(ctx); err != nil {
 				logger.Log.Error("listener cycle failed", zap.Error(err))
+			}
+
+		case <-cleanupTicker.C:
+			err := l.cleanup(ctx)
+			if err != nil {
+				logger.Log.Error("cleaup failed")
 			}
 		}
 	}
@@ -255,4 +268,9 @@ func (l *Listener) initState(ctx context.Context) error {
 	}
 
 	return l.stateRepo.UpdateLastProcessedBlock(ctx, transferListenerName, int64(latest))
+}
+
+func (l *Listener) cleanup(ctx context.Context) error {
+	return l.cleanupRepo.DeleteOldTransfers(ctx, retainRecords)
+
 }
