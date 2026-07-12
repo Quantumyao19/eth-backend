@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"eth-backend/internal/logger"
 
 	"github.com/doug-martin/goqu/v9"
+	"go.uber.org/zap"
 )
 
 type CleanupRepository struct {
@@ -21,7 +23,12 @@ func (r *CleanupRepository) DeleteOldTransfers(ctx context.Context, retainRecord
 
 	query := r.gdb.Delete("token_transfers").Where(goqu.I("id").Lt(subQuery))
 
-	_, err := query.Executor().ExecContext(ctx)
+	result, err := query.Executor().ExecContext(ctx)
+	if err != nil {
+		return err
+	}
 
-	return err
+	rows, _ := result.RowsAffected()
+	logger.Log.Info("cleanup transfers", zap.Int64("result", rows))
+	return nil
 }

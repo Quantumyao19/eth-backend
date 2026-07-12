@@ -91,7 +91,7 @@ func (l *Listener) loop(ctx context.Context) {
 		case <-cleanupTicker.C:
 			err := l.cleanup(ctx)
 			if err != nil {
-				logger.Log.Error("cleaup failed")
+				logger.Log.Error("cleaup failed", zap.Error(err))
 			}
 		}
 	}
