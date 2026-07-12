@@ -53,17 +53,17 @@ func WithMetrics(m *metrics.Metrics) gin.HandlerFunc {
 		c.Next()
 		duration := time.Since(start).Seconds()
 
-		status := strconv.Itoa(c.Writer.Status())
+		status := c.Writer.Status()
 
 		route := c.FullPath()
 		if route == "" {
 			route = "unknown"
 		}
 
-		m.HTTPRequestsTotal.WithLabelValues(c.Request.Method, route, status).Inc()
+		m.HTTPRequestsTotal.WithLabelValues(c.Request.Method, route, strconv.Itoa(status)).Inc()
 		m.HTTPRequestsDuration.WithLabelValues(c.Request.Method, route).Observe(duration)
-		if c.Writer.Status() >= 500 {
-			m.HTTPRequestsErrors.WithLabelValues(c.Request.Method, route, status).Inc()
+		if c.Writer.Status() >= 400 {
+			m.HTTPRequestsErrors.WithLabelValues(c.Request.Method, route, getStatusClass(status)).Inc()
 		}
 	}
 }
@@ -101,4 +101,19 @@ func WithRecover() gin.HandlerFunc {
 
 func (k contextKey) String() string {
 	return string(k)
+}
+
+func getStatusClass(status int) string {
+	switch {
+	case status >= 200 && status < 300:
+		return "2xx"
+	case status >= 300 && status < 400:
+		return "3xx"
+	case status >= 400 && status < 500:
+		return "4xx"
+	case status >= 500:
+		return "5xx"
+	default:
+		return "unknown"
+	}
 }

@@ -53,6 +53,7 @@ func Run() error {
 	gdb := goqu.New("postgres", sqlDB)
 	transferRepo := repository.NewTransferRepository(gdb)
 	stateRepo := repository.NewListenerStateRepository(gdb)
+	cleanupRepo := repository.NewCleanupRepository(gdb)
 
 	redisClient := db.NewRedisClient(cfg.DB.Redis.Addr, cfg.DB.Redis.Password, cfg.DB.Redis.DB)
 	defer redisClient.Close()
@@ -85,7 +86,7 @@ func Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	l := listener.NewListener(client.Raw(), transferRepo, stateRepo, redisClient, m)
+	l := listener.NewListener(client.Raw(), transferRepo, stateRepo, cleanupRepo, redisClient, m)
 	l.Start(ctx)
 
 	sigCh := make(chan os.Signal, 1)
