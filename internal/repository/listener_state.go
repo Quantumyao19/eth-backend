@@ -50,6 +50,20 @@ func (r *ListenerStateRepository) GetLastProcessedBlock(ctx context.Context, nam
 }
 
 func (r *ListenerStateRepository) UpdateLastProcessedBlockTx(ctx context.Context, tx *goqu.TxDatabase, name string, block int64) error {
+	_, err := tx.Update(tblListenerState).Set(
+		goqu.Record{"last_processed_block": block,
+			"updated_at": goqu.L("NOW()"),
+		}).Where(goqu.C("name").Eq(name)).Executor().ExecContext(ctx)
+
+	if err != nil {
+		logger.Log.Error("failed to update listener state", zap.Error(err), zap.String("name", name), zap.Int64("block", block))
+		return err
+	}
+
+	return nil
+}
+
+func (r *ListenerStateRepository) UpdateLastProcessedBlock(ctx context.Context, name string, block int64) error {
 	_, err := r.gdb.Update(tblListenerState).Set(
 		goqu.Record{"last_processed_block": block,
 			"updated_at": goqu.L("NOW()"),

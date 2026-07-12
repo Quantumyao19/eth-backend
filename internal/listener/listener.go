@@ -75,99 +75,110 @@ func (l *Listener) loop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+
 		case <-ticker.C:
-			func() {
-				start := time.Now()
-				defer func() {
-					l.metrics.ListenerProcessingDuration.Observe(time.Since(start).Seconds())
-				}()
-
-				ctxCycle, cancel := context.WithTimeout(ctx, 10*time.Second)
-				defer cancel()
-
-				latestBlock, err := l.client.BlockNumber(ctxCycle)
-				if err != nil {
-					logger.Log.Error("get block error", zap.Error(err))
-					l.metrics.ListenerErrorsTotal.WithLabelValues("get_block").Inc()
-					return
-				}
-
-				if latestBlock <= confirmations {
-					return
-				}
-				latestBlock -= confirmations
-				fromBlock := l.lastProcessedBlock + 1
-
-				if fromBlock > latestBlock {
-					logger.Log.Info("no ew blocks", zap.Uint64("latest", latestBlock))
-					return
-				}
-
-				if latestBlock-fromBlock > maxBlockRange {
-					latestBlock = fromBlock + maxBlockRange
-				}
-
-				logs, err := l.fetchLogs(ctxCycle, fromBlock, latestBlock)
-				if err != nil {
-					logger.Log.Error("fetch logs error", zap.Error(err))
-					l.metrics.ListenerErrorsTotal.WithLabelValues("fetch_logs").Inc()
-					return
-				}
-
-				var transfers []*model.Transfer
-				addressSet := make(map[string]struct{})
-
-				for _, vLog := range logs {
-					t := l.parseTransfer(vLog)
-					if t != nil {
-						transfers = append(transfers, t)
-
-						addressSet[t.From] = struct{}{}
-						addressSet[t.To] = struct{}{}
-					}
-				}
-
-				tx, err := l.transferRepo.Begin()
-				if err != nil {
-					return
-				}
-
-				var inserted int64
-				if len(transfers) > 0 {
-					inserted, err = l.transferRepo.InsertManyTx(ctxCycle, tx, transfers)
-					if err != nil {
-						tx.Rollback()
-						return
-					}
-				}
-
-				l.stateRepo.UpdateLastProcessedBlockTx(ctxCycle, tx, transferListenerName, int64(latestBlock))
-				if err != nil {
-					tx.Rollback()
-					return
-				}
-
-				if err = tx.Commit(); err != nil {
-					logger.Log.Error("listener commit error", zap.Error(err))
-					return
-				}
-
-				l.lastProcessedBlock = latestBlock
-
-				if len(transfers) > 0 {
-					l.invalidateTransaferCache(ctxCycle, addressSet)
-
-					l.metrics.ListenerEventsProcessedTotal.Add(float64(len(transfers)))
-				}
-				l.metrics.ListenerLastProcessedBlock.Set(float64(latestBlock))
-				l.metrics.ListenerBlocksProcessedTotal.Inc()
-
-				logger.Log.Info("batch insert completed", zap.Int("requested", len(transfers)), zap.Int64("inserted", inserted))
-
-			}()
-
+			if err := l.processCycle(ctx); err != nil {
+				logger.Log.Error("listener cycle failed", zap.Error(err))
+			}
 		}
 	}
+}
+
+func (l *Listener) processCycle(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		l.metrics.ListenerProcessingDuration.Observe(time.Since(start).Seconds())
+	}()
+
+	ctxCycle, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	latestBlock, err := l.client.BlockNumber(ctxCycle)
+	if err != nil {
+		l.metrics.ListenerErrorsTotal.WithLabelValues("get_block").Inc()
+		return err
+	}
+
+	if latestBlock <= confirmations {
+		return nil
+	}
+
+	latestBlock -= confirmations
+
+	fromBlock := l.lastProcessedBlock + 1
+
+	if fromBlock > latestBlock {
+		logger.Log.Info("no new blocks", zap.Uint64("latest", latestBlock))
+		return nil
+	}
+
+	if latestBlock-fromBlock > maxBlockRange {
+		latestBlock = fromBlock + maxBlockRange
+	}
+
+	logs, err := l.fetchLogs(ctxCycle, fromBlock, latestBlock)
+	if err != nil {
+		l.metrics.ListenerErrorsTotal.WithLabelValues("fetch_logs").Inc()
+		return err
+	}
+
+	var transfers []*model.Transfer
+	addressSet := make(map[string]struct{})
+
+	for _, vLog := range logs {
+		if t := l.parseTransfer(vLog); t != nil {
+			transfers = append(transfers, t)
+			addressSet[t.From] = struct{}{}
+			addressSet[t.To] = struct{}{}
+		}
+	}
+
+	inserted, err := l.persistTransfers(ctxCycle, transfers, latestBlock)
+	if err != nil {
+		return err
+	}
+
+	l.lastProcessedBlock = latestBlock
+
+	if len(transfers) > 0 {
+		l.invalidateTransaferCache(ctxCycle, addressSet)
+		l.metrics.ListenerEventsProcessedTotal.Add(float64(len(transfers)))
+	}
+
+	l.metrics.ListenerLastProcessedBlock.Set(float64(latestBlock))
+	l.metrics.ListenerBlocksProcessedTotal.Inc()
+
+	logger.Log.Info("listener cycle completed", zap.Uint64("from_block", fromBlock), zap.Uint64("to_block", latestBlock), zap.Int("transfers", len(transfers)), zap.Int64("inserted", inserted))
+
+	return nil
+}
+
+func (l *Listener) persistTransfers(ctx context.Context, transfers []*model.Transfer, latestBlock uint64) (int64, error) {
+	tx, err := l.transferRepo.Begin()
+	if err != nil {
+		return 0, err
+	}
+
+	defer tx.Rollback()
+
+	var inserted int64
+
+	if len(transfers) > 0 {
+		inserted, err = l.transferRepo.InsertManyTx(ctx, tx, transfers)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if err := l.stateRepo.UpdateLastProcessedBlockTx(ctx, tx, transferListenerName, int64(latestBlock)); err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return inserted, nil
 }
 
 func (l *Listener) fetchLogs(ctx context.Context, from, to uint64) ([]types.Log, error) {
@@ -230,5 +241,18 @@ func (l *Listener) invalidateTransaferCache(ctx context.Context, addressSet map[
 }
 
 func (l *Listener) initState(ctx context.Context) error {
-	return l.stateRepo.EnsureState(ctx, transferListenerName)
+	if err := l.stateRepo.EnsureState(ctx, transferListenerName); err != nil {
+		return err
+	}
+
+	latest, err := l.client.BlockNumber(ctx)
+	if err != nil {
+		return err
+	}
+
+	if latest > confirmations {
+		latest -= confirmations
+	}
+
+	return l.stateRepo.UpdateLastProcessedBlock(ctx, transferListenerName, int64(latest))
 }
