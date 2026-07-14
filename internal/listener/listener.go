@@ -100,7 +100,7 @@ func (l *Listener) loop(ctx context.Context) {
 func (l *Listener) processCycle(ctx context.Context) error {
 	start := time.Now()
 	defer func() {
-		l.metrics.ListenerProcessingDuration.Observe(time.Since(start).Seconds())
+		l.metrics.ListenerCycleDurationSeconds.Observe(time.Since(start).Seconds())
 	}()
 
 	ctxCycle, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -159,7 +159,7 @@ func (l *Listener) processCycle(ctx context.Context) error {
 	}
 
 	l.metrics.ListenerLastProcessedBlock.Set(float64(latestBlock))
-	l.metrics.ListenerBlocksProcessedTotal.Inc()
+	l.metrics.ListenerBlocksProcessedTotal.Add(float64(latestBlock - fromBlock + 1))
 
 	logger.Log.Info("listener cycle completed", zap.Uint64("from_block", fromBlock), zap.Uint64("to_block", latestBlock), zap.Int("transfers", len(transfers)), zap.Int64("inserted", inserted))
 

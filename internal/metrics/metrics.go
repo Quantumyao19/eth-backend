@@ -19,7 +19,7 @@ type Metrics struct {
 	// Listener
 	ListenerBlocksProcessedTotal prometheus.Counter
 	ListenerEventsProcessedTotal prometheus.Counter
-	ListenerProcessingDuration   prometheus.Histogram
+	ListenerCycleDurationSeconds prometheus.Histogram
 	ListenerLastProcessedBlock   prometheus.Gauge
 	ListenerBlockLag             prometheus.Gauge
 	ListenerErrorsTotal          *prometheus.CounterVec
@@ -91,11 +91,11 @@ func NewMetrics() *Metrics {
 				Help: "Total number of processed events",
 			},
 		),
-		ListenerProcessingDuration: prometheus.NewHistogram(
+		ListenerCycleDurationSeconds: prometheus.NewHistogram(
 			prometheus.HistogramOpts{
-				Name:    "listener_block_processing_duration_seconds",
-				Help:    "Block processing latency distributions",
-				Buckets: []float64{30, 60, 90, 120, 150, 180},
+				Name:    "listener_cycle_duration_seconds",
+				Help:    "Duration of a listener synchronization cycle in seconds",
+				Buckets: []float64{0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10},
 			},
 		),
 		ListenerLastProcessedBlock: prometheus.NewGauge(
@@ -130,7 +130,7 @@ func NewMetrics() *Metrics {
 
 		m.ListenerBlocksProcessedTotal,
 		m.ListenerEventsProcessedTotal,
-		m.ListenerProcessingDuration,
+		m.ListenerCycleDurationSeconds,
 		m.ListenerLastProcessedBlock,
 		m.ListenerBlockLag,
 		m.ListenerErrorsTotal,
