@@ -31,24 +31,40 @@ This project demonstrates practical experience in:
 - PostgreSQL
 - Redis
 - Docker Compose
+- Kubernetes
 - Prometheus / health monitoring
+
+## API overview
+
+The service exposes several REST endpoints for blockchain data access and transfer history:
+
+- GET /balance?address=<ETH_ADDRESS>
+  - Returns the ETH balance for a given wallet address
+- GET /block
+  - Returns the latest block number
+- GET /tx?hash=<TX_HASH>
+  - Returns transaction information by hash
+- GET /receipt?hash=<TX_HASH>
+  - Returns transaction receipt details
+- GET /tx/detail?hash=<TX_HASH>
+  - Returns transaction details along with parsed logs and transfer information
+- GET /transfers?address=<ETH_ADDRESS>&page=1&page_size=20
+  - Returns indexed transfer records associated with the given address
+
+## Deployment
+
+The project is prepared for containerized deployment and includes Kubernetes manifests under the k8s folder for:
+
+- application deployment
+- PostgreSQL
+- Redis
+- Prometheus
+- Grafana
 
 ## Quick start
 
+The application can be run locally with Docker Compose, but it is also designed for deployment in a Kubernetes environment.
+
 ```bash
 docker compose up --build
-```
-
-Example endpoints:
-
-```bash
-GET /balance?address=<ETH_ADDRESS>
-GET /tx?hash=<TX_HASH>
-GET /transfers?address=<ETH_ADDRESS>
-```
-
-## Run locally
-
-```bash
-go run ./cmd
 ```
