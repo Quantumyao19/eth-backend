@@ -154,7 +154,7 @@ func (l *Listener) processCycle(ctx context.Context) error {
 	l.lastProcessedBlock = latestBlock
 
 	if len(transfers) > 0 {
-		l.invalidateTransaferCache(ctxCycle, addressSet)
+		l.invalidateTransferCache(ctxCycle, addressSet)
 		l.metrics.ListenerEventsProcessedTotal.Add(float64(len(transfers)))
 	}
 
@@ -234,7 +234,7 @@ func (l *Listener) parseTransfer(vLog types.Log) *model.Transfer {
 	return transfer
 }
 
-func (l *Listener) invalidateTransaferCache(ctx context.Context, addressSet map[string]struct{}) {
+func (l *Listener) invalidateTransferCache(ctx context.Context, addressSet map[string]struct{}) {
 	for address := range addressSet {
 		indexKey := fmt.Sprintf("transfer:index:%s", address)
 
